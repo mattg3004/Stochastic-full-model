@@ -6,10 +6,13 @@ initial.disease.state <- function(demographic.ages  ,   initial.prop.susceptible
   disease.state                 =      matrix(0,num.comps*length(list.of.ages),1)
   
   for (i in 1:12){
-    disease.state[(((i-1)*num.comps)+1):((i)*num.comps)]      =    round(c( (demographic.ages[1,2]*(initial.prop.susceptible / 12) * (1 - mat.immunity.loss[i])) , (demographic.ages[1,2]*(initial.prop.susceptible / 12) * ( mat.immunity.loss[i])), 0, 0, (demographic.ages[1,2]*(1-initial.prop.susceptible)/12)))
+    disease.state[(((i-1)*num.comps)+1):((i)*num.comps)]      =    round(c( (demographic.ages[1,2]*(initial.prop.susceptible / 12) * (1 - mat.immunity.loss[i])) , 
+                                                                            (demographic.ages[1,2]*(initial.prop.susceptible / 12) * ( mat.immunity.loss[i])), 0, 0, 
+                                                                            (demographic.ages[1,2]*(1-initial.prop.susceptible)/12)))
   }
   for (i in 13:length(list.of.ages)){
-    disease.state[(((i-1)*num.comps)+1):((i)*num.comps)]      =    round(c(0,  demographic.ages[(i - 11),2]*initial.prop.susceptible  , 0, 0, (demographic.ages[(i - 11),2]*(1-initial.prop.susceptible))))
+    disease.state[(((i-1)*num.comps)+1):((i)*num.comps)]      =    round(c(0,  demographic.ages[(i - 11),2]*initial.prop.susceptible  , 0, 0, 
+                                                                           (demographic.ages[(i - 11),2]*(1-initial.prop.susceptible))))
   }
   return(disease.state)
 }
@@ -117,7 +120,9 @@ draw.maternal.under1 <- function(x, time.step){
   u = time.step / 30
   mat.immune.loss  =  x[1]
   numbers = x[2]
-  rmultinom(1, numbers , c(  (1-u) * (1 - mat.immune.loss * u),  (1-u) * mat.immune.loss * u , 0 ,0 , 0,  u * (1 - mat.immune.loss * u),  u * mat.immune.loss * u , 0 , 0, 0))
+  rmultinom(1, numbers , c(  (1-u) * (1 - mat.immune.loss * u),  (1-u) * mat.immune.loss * u , 0 ,0 , 0,
+                             u * (1 - mat.immune.loss * u),  u * mat.immune.loss * u , 0 , 0, 0))
+  
 }
 
 
@@ -224,7 +229,8 @@ draw.next.step.under1 <- function(disease.state, mixing.matrix, infectious.indic
   number.infectious  =   sum(exposed.out[4, ]) + sum(exposed.out[9, ])
   
   for (p in 1 : 12){
-    updated.state[seq(((num.comps*( p-1 )) + 1) ,num.comps*(p+1))]   =   updated.state[seq(((num.comps*( p-1 )) + 1) , num.comps*(p+1))]  +  sus.outs[ , p]  +  exposed.out[ , p]  +  inf.out[ , p] + recovered.out[ , p] + mat.outs[ , p]
+    updated.state[seq(((num.comps*( p-1 )) + 1) ,num.comps*(p+1))]   =   updated.state[seq(((num.comps*( p-1 )) + 1) , num.comps*(p+1))]  +
+      sus.outs[ , p]  +  exposed.out[ , p]  +  inf.out[ , p] + recovered.out[ , p] + mat.outs[ , p]
   }
   return(list(updated.state, new.infected))
 }
@@ -266,10 +272,12 @@ draw.next.step.over1 <- function(disease.state, mixing.matrix, infectious.indice
   number.infectious  =   sum(exposed.out[4, ]) + sum(exposed.out[9, ])
   
   for (p in 13 : ((length(disease.state) / num.comps) - 1)){
-    updated.state[seq(((num.comps*( p-1 )) + 1) ,num.comps*(p+1))]   =   updated.state[seq(((num.comps*( p-1 )) + 1) , num.comps*(p+1))]  +  sus.outs[ , p-12]  +  exposed.out[ , p-12]  +  inf.out[ , p-12] + recovered.out[ , p-12]
+    updated.state[seq(((num.comps*( p-1 )) + 1) ,num.comps*(p+1))]   =   updated.state[seq(((num.comps*( p-1 )) + 1) , num.comps*(p+1))]  +  
+      sus.outs[ , p-12]  +  exposed.out[ , p-12]  +  inf.out[ , p-12] + recovered.out[ , p-12]
   }
   p = length(disease.state) / num.comps
-  updated.state[seq(((num.comps*( p-1 )) + 1) ,num.comps*(p))]   =   updated.state[seq(((num.comps*( p-1 )) + 1) , num.comps*(p))]  +  sus.outs[1:num.comps , p-12]  +  exposed.out[1:num.comps , p-12]  +  inf.out[1:num.comps , p-12]  +  recovered.out[ 1:num.comps, p-12]
+  updated.state[seq(((num.comps*( p-1 )) + 1) ,num.comps*(p))]   =   updated.state[seq(((num.comps*( p-1 )) + 1) , num.comps*(p))]  +  
+    sus.outs[1:num.comps , p-12]  +  exposed.out[1:num.comps , p-12]  +  inf.out[1:num.comps , p-12]  +  recovered.out[ 1:num.comps, p-12]
   
   return(list(updated.state, new.infected))
 }
