@@ -5,7 +5,10 @@ uk.contacts                   =       read.csv("uk_contacts.csv")
 conts                         =       read.csv("contact_rate.csv")
 initial.pop                   =       sum(demographic.ages[, 2])
 
-
+########################
+# Construct the mixing matrix which will be used for simulation. 
+# Here we produce a mixing matrix equivalent to uniform mixing
+########################
 mixing.matrix                 <-      full.mixing.matrix(contacts, demographic.ages)      # average number of people met of each age grooup, stratified by age
 mixing.matrix               =       matrix(0, length(demographic.ages[,1]) + 11, length(demographic.ages[,1])+11)
 pop.by.age  =  matrix(0, 109,1)
@@ -22,6 +25,10 @@ list.of.ages                  =       matrix(0, length(demographic.ages[ , 1]) +
 list.of.ages[1 : 12]          =       (seq(0,11) / 12)
 list.of.ages[13 : length(list.of.ages)]  =  seq(1 , max(demographic.ages[, 1]))
 
+initial.prop.susceptible  =  0.05
+########################
+# Set up the disease state matrix, with MSEIR compartments
+########################
 num.comps = 5
 
 maternal.indices              =       seq(1, (length(list.of.ages) - 2) * num.comps, num.comps)
@@ -29,6 +36,10 @@ susceptible.indices           =       seq(2  , length(list.of.ages) * num.comps 
 exposed.indices               =       seq(3, length(list.of.ages) * num.comps, num.comps)
 infectious.indices            =       seq(4, length(list.of.ages) * num.comps, num.comps)
 recovered.indices             =       seq(num.comps, length(list.of.ages) * num.comps, num.comps)
+
+oldest.migrant       =      15 
+migrant.indices      =      seq(4,  num.comps * (oldest.migrant + 13), num.comps)
+
 
 time.step = 1
 
@@ -49,4 +60,5 @@ mat.immunity.loss[1:9]             =      (1/(1+exp(-(seq(0,8,1) - 5))))
 for (i in 1 : 8){
   mat.immunity.loss[i]             =    1  -  exp(-i * 0.03)
 }
+
 
