@@ -7,11 +7,16 @@ initial.disease.state <- function(demographic.ages  ,   initial.prop.susceptible
   
   for (i in 1:12){
     disease.state[(((i-1)*num.comps)+1):((i)*num.comps)]      =    round(c( (demographic.ages[1,2]*(initial.prop.susceptible / 12) * (1 - mat.immunity.loss[i])) , 
-                                                                            (demographic.ages[1,2]*(initial.prop.susceptible / 12) * ( mat.immunity.loss[i])), 0, 0, 
+                                                                            (demographic.ages[1,2]*(initial.prop.susceptible / 12) * ( mat.immunity.loss[i])), 
+                                                                              0, 
+                                                                              0, 
                                                                             (demographic.ages[1,2]*(1-initial.prop.susceptible)/12)))
   }
   for (i in 13:length(list.of.ages)){
-    disease.state[(((i-1)*num.comps)+1):((i)*num.comps)]      =    round(c(0,  demographic.ages[(i - 11),2]*initial.prop.susceptible  , 0, 0, 
+    disease.state[(((i-1)*num.comps)+1):((i)*num.comps)]      =    round(c(0,  
+                                                                           demographic.ages[(i - 11),2]*initial.prop.susceptible,
+                                                                           0, 
+                                                                           0, 
                                                                            (demographic.ages[(i - 11),2]*(1-initial.prop.susceptible))))
   }
   return(disease.state)
@@ -130,7 +135,8 @@ draw.sus.under1 <- function(x){
   u = time.step / 30
   foi = min(1, x[1])
   numbers = x[2]
-  rmultinom(1, numbers , c( 0, (1-u)*(1-foi) , (1-u)*foi ,0 , 0, 0, u*(1-foi) , u*foi , 0, 0))
+  rmultinom(1, numbers , c( 0, (1-u)*(1-foi) , (1-u)*foi ,0 , 0,
+                            0, u*(1-foi) , u*foi , 0, 0))
 }
 
 
@@ -138,7 +144,8 @@ draw.exposed.under1 <- function(x){
   u = time.step / 30
   numbers = x[1]
   mu = min(1, time.step / incubation.period)
-  rmultinom(1, numbers, c(0 , 0, (1-u) * (1- mu), (1-u ) * mu,  0  , 0 , 0 ,  u  * (1 - mu)  ,  u  *  mu, 0))
+  rmultinom(1, numbers, c(0 , 0, (1-u) * (1- mu), (1-u ) * mu,  0  ,
+                          0 , 0 ,  u  * (1 - mu)  ,  u  *  mu, 0))
 }
 
 
@@ -146,14 +153,16 @@ draw.infecteds.under1 <- function(x){
   u = time.step / 30
   rho = min(1, time.step / infectious.period)
   numbers = x[1]
-  rmultinom(1, numbers , c(0 , 0 , 0,  (1-u) * (1- rho) , (1-u ) * rho , 0 , 0 , 0,  u  * (1 - rho) ,  u  *  rho))
+  rmultinom(1, numbers , c(0 , 0 , 0,  (1-u) * (1- rho) , (1-u ) * rho ,
+                           0 , 0 , 0,  u  * (1 - rho) ,  u  *  rho))
 }
 
 
 draw.recovered.under1 <- function(x){
   u = time.step / 30
   numbers = x[1]
-  rmultinom(1, numbers , c(0 , 0 ,  0, 0 ,  (1-u ) , 0 , 0 , 0 , 0 ,  u  ))
+  rmultinom(1, numbers , c(0 , 0 ,  0, 0 ,  (1-u ) ,
+                           0 , 0 , 0 , 0 ,  u  ))
 }
 
 
@@ -161,14 +170,16 @@ draw.sus <- function(x){
   u = time.step / 365
   foi = min(1, x[1])
   numbers = x[2]
-  rmultinom(1, numbers , c( 0, (1-u)*(1-foi) , (1-u)*foi ,0 , 0, 0, u*(1-foi) , u*foi , 0, 0))
+  rmultinom(1, numbers , c( 0, (1-u)*(1-foi) , (1-u)*foi ,0 , 0, 
+                            0, u*(1-foi) , u*foi , 0, 0))
 }
 
 draw.exposed <- function(x){
   u = time.step / 365
   numbers = x[1]
   mu = min(1, time.step / incubation.period)
-  rmultinom(1, numbers, c(0 , 0, (1-u) * (1- mu), (1-u ) * mu,  0  , 0 , 0 ,  u  * (1 - mu)  ,  u  *  mu, 0))
+  rmultinom(1, numbers, c(0 , 0, (1-u) * (1- mu), (1-u ) * mu,  0  ,
+                          0 , 0 ,  u  * (1 - mu)  ,  u  *  mu, 0))
 }
 
 
@@ -176,14 +187,16 @@ draw.infecteds <- function(x){
   u = time.step / 365
   rho = min(1, time.step / infectious.period)
   numbers = x[1]
-  rmultinom(1, numbers , c(0 , 0 , 0,  (1-u) * (1- rho) , (1-u ) * rho , 0 , 0 , 0,  u  * (1 - rho) ,  u  *  rho))
+  rmultinom(1, numbers , c(0 , 0 , 0,  (1-u) * (1- rho) , (1-u ) * rho ,
+                           0 , 0 , 0,  u  * (1 - rho) ,  u  *  rho))
 }
 
 
 draw.recovered <- function(x){
   u = time.step / 365
   numbers = x[1]
-  rmultinom(1, numbers , c(0 , 0 ,  0, 0 ,  (1-u ) , 0 , 0 , 0 , 0 ,  u  ))
+  rmultinom(1, numbers , c(0 , 0 ,  0, 0 ,  (1-u ) ,
+                           0 , 0 , 0 , 0 ,  u  ))
 }
 
 
