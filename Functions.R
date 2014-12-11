@@ -9,7 +9,7 @@ initial.disease.state <- function(demographic.ages  ,   initial.prop.susceptible
     disease.state[(((i-1)*num.comps)+1):((i)*num.comps)]      =    round(c( (demographic.ages[1,2]*(initial.prop.susceptible / 12) * (1 - mat.immunity.loss[i])) , (demographic.ages[1,2]*(initial.prop.susceptible / 12) * ( mat.immunity.loss[i])), 0, 0, (demographic.ages[1,2]*(1-initial.prop.susceptible)/12)))
   }
   for (i in 13:length(list.of.ages)){
-    disease.state[(((i-1)*num.comps)+1):((i)*num.comps)]      =    round(c(0, (demographic.ages[(i - 11),2]*initial.prop.susceptible ) , 0, 0, (demographic.ages[(i - 11),2]*(1-initial.prop.susceptible))))
+    disease.state[(((i-1)*num.comps)+1):((i)*num.comps)]      =    round(c(0,  demographic.ages[(i - 11),2]*initial.prop.susceptible  , 0, 0, (demographic.ages[(i - 11),2]*(1-initial.prop.susceptible))))
   }
   return(disease.state)
 }
@@ -86,7 +86,7 @@ demographics <- function(disease.state, birth.rate, death.rate, time.step){
   }
   births.average    =   birth.rate * N * time.step
   births.total      =   rpois(1, births.average)
-  disease.state[1]  =   dsease.state[1]  +  births.total
+  disease.state[1]  =   disease.state[1]  +  births.total
   if( death.rate > 1 ){
     death.rate = death.rate  / (1000 * 365)
   }
@@ -104,7 +104,7 @@ demographics <- function(disease.state, birth.rate, death.rate, time.step){
 migrants.l.per.year <- function(disease.state, migrant.indices, time.step, l){
   k  =  length(migrant.indices)
   migrant.infecteds       =     rpois(k  , l * time.step/ (365 * k))
-  disease.state           =     disease.state + migrant.infecteds
+  disease.state[migrant.indices]           =     disease.state[migrant.indices] + migrant.infecteds
   return(disease.state)
 }
 
@@ -284,18 +284,18 @@ draw.next.step.all <- function(disease.state, mixing.matrix, infectious.indices,
                                  demographic.ages, num.comps){
   
   output.under1  =  draw.next.step.under1(disease.state, mixing.matrix, infectious.indices, 
-                                                    time.step , infectious.period, beta,
-                                                    demographic.ages, num.comps)
+                                           time.step , infectious.period, beta,
+                                           demographic.ages, num.comps)
   updated.state.under1  =  unlist(output.under1[1])
   new.infecteds.under1  =  unlist(output.under1[2])
-  output.over1 =  draw.next.step.over1(disease.state, mixing.matrix, infectious.indices, 
-                                   time.step , infectious.period, beta,
-                                   demographic.ages, num.comps)
+  output.over1   =  draw.next.step.over1(disease.state, mixing.matrix, infectious.indices, 
+                                          time.step , infectious.period, beta,
+                                          demographic.ages, num.comps)
   updated.state.over1  =  unlist(output.over1[1])
   new.infecteds.over1  =  unlist(output.over1[2])
   
-  updated.state  =  updated.state.under1  +  updated.state.over1
-  new.infecteds  =  new.infecteds.under1   +  new.infecteds.over1
+  updated.state  =  updated.state.under1   +   updated.state.over1
+  new.infecteds  =  new.infecteds.under1   +   new.infecteds.over1
   return(list(updated.state, new.infecteds))
 }
 

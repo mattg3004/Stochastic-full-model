@@ -9,7 +9,7 @@ initial.pop                   =       sum(demographic.ages[, 2])
 # Construct the mixing matrix which will be used for simulation. 
 # Here we produce a mixing matrix equivalent to uniform mixing
 ########################
-mixing.matrix                 <-      full.mixing.matrix(contacts, demographic.ages)      # average number of people met of each age grooup, stratified by age
+# mixing.matrix                 <-      full.mixing.matrix(contacts, demographic.ages)      # average number of people met of each age grooup, stratified by age
 mixing.matrix               =       matrix(0, length(demographic.ages[,1]) + 11, length(demographic.ages[,1])+11)
 pop.by.age  =  matrix(0, 109,1)
 for ( i in 1:12){
@@ -26,6 +26,7 @@ list.of.ages[1 : 12]          =       (seq(0,11) / 12)
 list.of.ages[13 : length(list.of.ages)]  =  seq(1 , max(demographic.ages[, 1]))
 
 initial.prop.susceptible  =  0.05
+beta_1   =   0.6
 ########################
 # Set up the disease state matrix, with MSEIR compartments
 ########################
