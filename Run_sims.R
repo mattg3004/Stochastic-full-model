@@ -1,14 +1,17 @@
 source("Initial_conditions.R")
-num.steps  =  5000
+num.steps  =  25000
 birth.rate =  40
 death.rate = 15
+vacc.prop = 1
 l = 1
+vacc.prop = 0.85 * 0.9
 new.infections  =  matrix(0, num.steps, 1)
 all.infections  =  matrix(0, num.steps, 1)
 prop.sus        =  matrix(0, num.steps, 1)
-initial.prop.susceptible  =  0.05
+initial.prop.susceptible  =  0
 disease.state  =  initial.disease.state(demographic.ages  ,   initial.prop.susceptible  ,  num.comps,  list.of.ages, mat.immunity.loss)
 t  =  0
+quartz()
 for (i in 1 : num.steps){
   disease.state  =  demographics(disease.state, birth.rate, death.rate, time.step)
   disease.state  =  migrants.l.per.year(disease.state, migrant.indices, time.step, l)
@@ -17,7 +20,8 @@ for (i in 1 : num.steps){
   
   A  =  draw.next.step.all(disease.state, mixing.matrix, infectious.indices, 
                                       time.step , infectious.period, beta,
-                                      demographic.ages, num.comps)
+                                      demographic.ages, num.comps, maternal.indices, 
+                                      mat.immunity.loss, vacc.prop)
   disease.state      =   unlist(A[1])
   new.infections[i]  =   unlist(A[2])
   all.infections[i]  =   sum(disease.state[infectious.indices])

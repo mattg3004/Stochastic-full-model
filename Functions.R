@@ -125,8 +125,9 @@ draw.maternal.under1 <- function(x, time.step){
   u = time.step / 30
   mat.immune.loss  =  x[1]
   numbers = x[2]
+  v  =  x[3]
   rmultinom(1, numbers , c(  (1-u) * (1 - mat.immune.loss * u),  (1-u) * mat.immune.loss * u , 0 ,0 , 0,
-                             u * (1 - mat.immune.loss * u),  u * mat.immune.loss * u , 0 , 0, 0))
+                             u * (1 - mat.immune.loss * u) * (1 - v),  u * mat.immune.loss * u * (1 - v) , 0 , 0, u * v))
   
 }
 
@@ -135,8 +136,9 @@ draw.sus.under1 <- function(x){
   u = time.step / 30
   foi = min(1, x[1])
   numbers = x[2]
-  rmultinom(1, numbers , c( 0, (1-u)*(1-foi) , (1-u)*foi ,0 , 0,
-                            0, u*(1-foi) , u*foi , 0, 0))
+  v = x[3]
+  rmultinom(1, numbers , c( 0, (1 - u) * (1 - foi) , (1 - u) * foi ,0 , 0,
+                            0, u * (1 - foi) * (1 - v) , u * foi * (1-v) , 0, u * v))
 }
 
 
@@ -206,7 +208,8 @@ draw.recovered <- function(x){
 ###############################
 draw.next.step.under1 <- function(disease.state, mixing.matrix, infectious.indices, 
                            time.step , infectious.period, beta,
-                           demographic.ages, num.comps){
+                           demographic.ages, num.comps, maternal.indices, 
+                           mat.immunity.loss, vacc.prop){
   
   updated.state =  matrix(0, length(disease.state), 1)
   
@@ -218,11 +221,13 @@ draw.next.step.under1 <- function(disease.state, mixing.matrix, infectious.indic
   x              =      matrix(0, 12, 3)
   x[ , 1]        =      mat.immunity.loss[1 : 12]
   x[ , 2]        =      disease.state[maternal.indices[1:12]]
+  x[9, 3]        =      vacc.prop
   mat.outs       =      apply(x, 1, draw.maternal.under1, time.step = time.step)
   
-  x              =      matrix(0, 12, 2)
+  x              =      matrix(0, 12, 3)
   x[ , 1]        =      foi.ages[1 : 12]
   x[ , 2]        =      disease.state[susceptible.indices[1:12]]
+  x[9, 3]        =      vacc.prop
   sus.outs       =      apply(x, 1, draw.sus.under1)
   
   x1             =      matrix(0, 12, 2)
@@ -302,11 +307,13 @@ draw.next.step.over1 <- function(disease.state, mixing.matrix, infectious.indice
 ###############################
 draw.next.step.all <- function(disease.state, mixing.matrix, infectious.indices, 
                                  time.step , infectious.period, beta,
-                                 demographic.ages, num.comps){
+                                 demographic.ages, num.comps, maternal.indices, 
+                                 mat.immunity.loss, vacc.prop){
   
   output.under1  =  draw.next.step.under1(disease.state, mixing.matrix, infectious.indices, 
                                            time.step , infectious.period, beta,
-                                           demographic.ages, num.comps)
+                                           demographic.ages, num.comps, maternal.indices, 
+                                           mat.immunity.loss, vacc.prop)
   updated.state.under1  =  unlist(output.under1[1])
   new.infecteds.under1  =  unlist(output.under1[2])
   output.over1   =  draw.next.step.over1(disease.state, mixing.matrix, infectious.indices, 

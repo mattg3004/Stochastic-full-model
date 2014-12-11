@@ -55,11 +55,11 @@ infectious.period             =       8          # number of days spent in the i
 rho                           =       min(1,time.step/infectious.period)    # probability of losing infectiousness. not necessarily recovered from the infection, but no longer infectious.
 
 mat.immunity.loss             =      matrix(1, length(maternal.indices), 1)
-mat.immunity.loss[1:9]             =      c(0, 0, 0.1, 0.2, 0.3, 0.5, 0.8, 0.9, 1)
-mat.immunity.loss[1:9]             =      (1/(1+exp(-(seq(0,8,1) - 5))))
+#mat.immunity.loss[1:9]             =      c(0, 0, 0.1, 0.2, 0.3, 0.5, 0.8, 0.9, 1)
+mat.immunity.loss[1:8]             =      (1/(1+exp(-(seq(0,7,1) - 5))))
 
-for (i in 1 : 8){
-  mat.immunity.loss[i]             =    1  -  exp(-i * 0.03)
-}
+#for (i in 1 : 8){
+#  mat.immunity.loss[i]             =    1  -  exp(-i * 0.03)
+#}
 
 
