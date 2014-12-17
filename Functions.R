@@ -23,6 +23,8 @@ initial.disease.state <- function(demographic.ages  ,   initial.prop.susceptible
 }
 
 
+
+
 #############################
 # This function reduces the proportion of people who are susceptible between min.age and max.age
 # The proportion who are removed is given by the proportion.sus.to.remove variable
@@ -36,6 +38,8 @@ reduce.susceptibles <- function(min.age, max.age, disease.state, proportion.sus.
   disease.state [ susceptibles ]  =   round((disease.state[ susceptibles ] * ( 1 - proportion.sus.to.remove ) ) )
   return(disease.state)
 }
+
+
 
 #############################
 # Calculate the population by age group
@@ -73,6 +77,24 @@ calibrate.beta <- function (mixing.matrix, disease.state, max.age, time.step, in
 
 
 
+
+#############################
+# Calculate the proportion of the each age group who is susceptible
+#############################
+calc.sus.by.age <- function(disease.state, sus, num.comps){
+  p = disease.state[sus]
+  p1 = matrix(0, 98,1)
+  p1[1] = sum(p[1:12])
+  p1[2:98] = p[13:109]
+  l = population.by.age(disease.state, num.comps)
+  k2 = matrix(0, 98, 1)
+  k2 = sum(l[1:12])
+  k2[2:98] = l[13:109]
+  return(p1/k2)
+}
+
+
+
 ###############################
 # Calculate the force of infection by age given the current state, beta and the mixing matrix
 ###############################
@@ -82,6 +104,8 @@ foi.by.next.gen <- function ( mixing.matrix, disease.state, infectious.indices, 
   foi.by.age  =  (colSums((infectious.by.age * t( mixing.matrix) * beta) ) / pop.by.age) * min( 1, time.step / infectious.period)
   return(foi.by.age)  
 }
+
+
 
 
 ###############################
@@ -103,6 +127,7 @@ demographics <- function(disease.state, birth.rate, death.rate, time.step){
   
   return(disease.state)
 }
+
 
 
 
@@ -230,18 +255,18 @@ draw.next.step.under1 <- function(disease.state, mixing.matrix, infectious.indic
   x[9, 3]        =      vacc.prop
   sus.outs       =      apply(x, 1, draw.sus.under1)
   
-  x1             =      matrix(0, 12, 2)
+  x1             =      matrix(0, 12, 1)
   x1[ , 1]       =      disease.state[exposed.indices[1:12]]
-  exposed.out    =      apply(x1, 1, draw.exposed.under1)
+  exposed.out    =      sapply(x1, draw.exposed.under1)
   
   
-  x2             =      matrix(0, 12, 2)
+  x2             =      matrix(0, 12, 1)
   x2[ , 1]       =      disease.state[infectious.indices[1:12]]
-  inf.out        =      apply(x2, 1, draw.infecteds.under1)
+  inf.out        =      sapply(x2, draw.infecteds.under1)
   
-  x3             =      matrix(0, 12, 2)
+  x3             =      matrix(0, 12, 1)
   x3[ , 1]       =      disease.state[recovered.indices[1:12]]
-  recovered.out   =     apply(x3, 1, draw.recovered.under1)
+  recovered.out   =     sapply(x3, draw.recovered.under1)
   
   new.infected       =   sum(sus.outs[3, ])  +  sum(sus.outs[8, ])
   number.infectious  =   sum(exposed.out[4, ]) + sum(exposed.out[9, ])
@@ -273,18 +298,18 @@ draw.next.step.over1 <- function(disease.state, mixing.matrix, infectious.indice
   x[ , 2]        =      disease.state[susceptible.indices[-(1:12)]]
   sus.outs       =      apply(x, 1, draw.sus)
   
-  x1             =      matrix(0, length(foi.ages) - 12, 2)
+  x1             =      matrix(0, length(foi.ages) - 12, 1)
   x1[ , 1]       =      disease.state[exposed.indices[-(1:12)]]
-  exposed.out    =      apply(x1, 1, draw.exposed)
+  exposed.out    =      sapply(x1, draw.exposed)
   
   
-  x2             =      matrix(0, length(foi.ages) - 12, 2)
+  x2             =      matrix(0, length(foi.ages) - 12, 1)
   x2[ , 1]       =      disease.state[infectious.indices[-(1:12)]]
-  inf.out        =      apply(x2, 1, draw.infecteds)
+  inf.out        =      sapply(x2, draw.infecteds)
   
-  x3             =      matrix(0, length(foi.ages) - 12, 2)
+  x3             =      matrix(0, length(foi.ages) - 12, 1)
   x3[ , 1]       =      disease.state[recovered.indices[-(1:12)]]
-  recovered.out   =     apply(x3, 1, draw.recovered)
+  recovered.out   =     sapply(x3, draw.recovered)
   
   new.infected       =   sum(sus.outs[3, ])  +  sum(sus.outs[8, ])
   number.infectious  =   sum(exposed.out[4, ]) + sum(exposed.out[9, ])
@@ -306,19 +331,19 @@ draw.next.step.over1 <- function(disease.state, mixing.matrix, infectious.indice
 # Function which draws the populations for all age groups for the next timestep
 ###############################
 draw.next.step.all <- function(disease.state, mixing.matrix, infectious.indices, 
-                                 time.step , infectious.period, beta,
-                                 demographic.ages, num.comps, maternal.indices, 
-                                 mat.immunity.loss, vacc.prop){
+                               time.step , infectious.period, beta,
+                               demographic.ages, num.comps, maternal.indices, 
+                               mat.immunity.loss, vacc.prop){
   
   output.under1  =  draw.next.step.under1(disease.state, mixing.matrix, infectious.indices, 
-                                           time.step , infectious.period, beta,
-                                           demographic.ages, num.comps, maternal.indices, 
-                                           mat.immunity.loss, vacc.prop)
+                                          time.step , infectious.period, beta,
+                                          demographic.ages, num.comps, maternal.indices, 
+                                          mat.immunity.loss, vacc.prop)
   updated.state.under1  =  unlist(output.under1[1])
   new.infecteds.under1  =  unlist(output.under1[2])
   output.over1   =  draw.next.step.over1(disease.state, mixing.matrix, infectious.indices, 
-                                          time.step , infectious.period, beta,
-                                          demographic.ages, num.comps)
+                                         time.step , infectious.period, beta,
+                                         demographic.ages, num.comps)
   updated.state.over1  =  unlist(output.over1[1])
   new.infecteds.over1  =  unlist(output.over1[2])
   
@@ -330,3 +355,448 @@ draw.next.step.all <- function(disease.state, mixing.matrix, infectious.indices,
 
 
 
+
+###############################
+# Function which draws the populations for the next stage after a timestep for under 1's, with no infection taking place.
+# This is separate as these are stratified monthly, whilst the rest of the population is stratified yearly. 
+###############################
+age.under1 <- function(disease.state, mixing.matrix, infectious.indices, 
+                                  time.step , infectious.period, beta,
+                                  demographic.ages, num.comps, maternal.indices, 
+                                  mat.immunity.loss, vacc.prop){
+  
+  updated.state =  matrix(0, length(disease.state), 1)
+  
+  foi.ages  <-   matrix(0, length(disease.state[infectious.indices]), 1)
+  
+  
+  x              =      matrix(0, 12, 3)
+  x[ , 1]        =      mat.immunity.loss[1 : 12]
+  x[ , 2]        =      disease.state[maternal.indices[1:12]]
+  x[9, 3]        =      vacc.prop
+  mat.outs       =      apply(x, 1, draw.maternal.under1, time.step = time.step)
+  
+  
+  x              =      matrix(0, 12, 3)
+  x[ , 1]        =      foi.ages[1 : 12]
+  x[ , 2]        =      disease.state[susceptible.indices[1:12]]
+  x[9, 3]        =      vacc.prop
+  sus.outs       =      apply(x, 1, draw.sus.under1)
+  
+  
+  x3             =      matrix(0, 12, 1)
+  x3[ , 1]       =      disease.state[recovered.indices[1:12]]
+  recovered.out   =     sapply(x3, draw.recovered.under1)
+ 
+  
+  for (p in 1 : 12){
+    updated.state[seq(((num.comps*( p-1 )) + 1) ,num.comps*(p+1))]   =   updated.state[seq(((num.comps*( p-1 )) + 1) , num.comps*(p+1))]  +
+      sus.outs[ , p]  +  exposed.out[ , p]  +  inf.out[ , p] + recovered.out[ , p] + mat.outs[ , p]
+  }
+  
+  return(updated.state)
+}
+
+
+
+###############################
+# Function which draws the populations for the next stage after a timestep for over 1's, with no infection taking place
+###############################
+age.over1 <- function(disease.state, mixing.matrix, infectious.indices, 
+                                 time.step , infectious.period, beta,
+                                 demographic.ages, num.comps){
+  
+  updated.state = matrix(0, length(disease.state), 1)
+  foi.ages  <-   matrix(0, length(disease.state[infectious.indices]), 1)
+  
+  x              =      matrix(0, length(foi.ages) - 12, 2)
+  x[ , 1]        =      foi.ages[-(1:12)]
+  x[ , 2]        =      disease.state[susceptible.indices[-(1:12)]]
+  sus.outs       =      apply(x, 1, draw.sus)
+  
+  x3             =      matrix(0, length(foi.ages) - 12, 2)
+  x3[ , 1]       =      disease.state[recovered.indices[-(1:12)]]
+  recovered.out   =     sapply(x3, draw.recovered)
+  
+  for (p in 13 : ((length(disease.state) / num.comps) - 1)){
+    updated.state[seq(((num.comps*( p-1 )) + 1) ,num.comps*(p+1))]   =   updated.state[seq(((num.comps*( p-1 )) + 1) , num.comps*(p+1))]  +  
+      sus.outs[ , p-12]  +  exposed.out[ , p-12]  +  inf.out[ , p-12] + recovered.out[ , p-12]
+  }
+  p = length(disease.state) / num.comps
+  updated.state[seq(((num.comps*( p-1 )) + 1) ,num.comps*(p))]   =   updated.state[seq(((num.comps*( p-1 )) + 1) , num.comps*(p))]  +  
+    sus.outs[1:num.comps , p-12]  +  exposed.out[1:num.comps , p-12]  +  inf.out[1:num.comps , p-12]  +  recovered.out[ 1:num.comps, p-12]
+  
+  return(updated.state)
+}
+
+
+
+###############################
+# Function which ages the population by a given length of time, with no infection occurring in that period
+###############################
+age.population <- function(disease.state, mixing.matrix, infectious.indices, 
+                               time.step , infectious.period, beta,
+                               demographic.ages, num.comps, maternal.indices, 
+                               mat.immunity.loss, vacc.prop){
+  
+  updated.state.under1  =  age.under1(disease.state, mixing.matrix, infectious.indices, 
+                                          time.step , infectious.period,
+                                          demographic.ages, num.comps, maternal.indices, 
+                                          mat.immunity.loss, vacc.prop)
+  
+  updated.state.over1   =  age.over1(disease.state, mixing.matrix, infectious.indices, 
+                                         time.step , infectious.period,
+                                         demographic.ages, num.comps)
+  
+  updated.state  =  updated.state.under1   +   updated.state.over1
+  
+  return(updated.state)
+}
+
+
+
+###############################
+# Function which will perform aging of the population along with taking care of demographics for a given length of time
+###############################
+age.population.with.demographics <- function(disease.state, mixing.matrix, infectious.indices, 
+                                              time.step , infectious.period, 
+                                              demographic.ages, num.comps, maternal.indices, 
+                                              mat.immunity.loss, vacc.prop, num.steps){
+  
+  for (i in 1 : num.steps){
+    disease.state  =  demographics(disease.state, birth.rate, death.rate, time.step)
+    disease.state  =  age.population(disease.state, mixing.matrix, infectious.indices, 
+                                     time.step , infectious.period, beta,
+                                     demographic.ages, num.comps, maternal.indices, 
+                                     mat.immunity.loss, vacc.prop)
+    
+    
+  }
+  
+  return(disease.state)
+}
+
+
+
+###############################
+# Produce plots of various state descriptors
+###############################
+produce.plots <-function(i, prop.sus, new.infections, all.infections, disease.state, susceptible.indices, num.comps){
+  
+  par(mfrow = c(2,2))
+  plot(1:i, 1- prop.sus[1:i], type = "l", col = 'seagreen3', xlab = 'Time', ylab = 'Population Immunity')
+  plot(0:97, 1 - calc.sus.by.age(disease.state, susceptible.indices, num.comps), type = "l", col = 'purple', ylab = 'Immunity by age', xlab = 'Age')
+  plot(1:i, new.infections[1:i], type = "l", col = 'dodgerblue3', xlab = 'Time', ylab = 'Infected by day')
+  plot(1:i, all.infections[1:i], type = "l", col = 'red', xlab = 'Time', ylab = 'All infectious')  
+}
+
+
+
+
+
+###############################
+# Make it so that it is possible to receive the output of a function which is in a list, and automatically split it into components using list[..]
+###############################
+list <- structure(NA,class="result")
+"[<-.result" <- function(x,...,value) {
+  args <- as.list(match.call())
+  args <- args[-c(1:2,length(args))]
+  length(value) <- length(args)
+  for(i in seq(along=args)) {
+    a <- args[[i]]
+    if(!missing(a)) eval.parent(substitute(a <- v,list(a=a,v=value[[i]])))
+  }
+  x
+}
+
+
+
+
+
+###############################
+# Run simulations using previously defined functions
+###############################
+Run.simulations <- function(num.steps, disease.state, mixing.matrix, infectious.indices,
+                            birth.rate, death.rate,
+                            time.step , infectious.period, seasonal.scaling,
+                            demographic.ages, num.comps, maternal.indices, 
+                            mat.immunity.loss, vacc.prop, l, do.plots, initial.time){
+  
+  # Use initial.time to specify where in the seasonal process the disease is. 
+  # initial.time = 0 or 280 gives peak initial transmission which decreases or average initial transmission which increases
+  
+  t  =  initial.time
+  # seasonal.scaling is the increase and decrease seen in the transmission rates during peak and lowest transmission. call this beta_1 for ease of use.
+  beta_1 = seasonal.scaling
+  new.infections  =  matrix(0, num.steps, 1)
+  all.infections  =  matrix(0, num.steps, 1)
+  prop.sus        =  matrix(0, num.steps, 1)
+  for (run in 1 : num.steps){
+    pop.by.age  =  population.by.age(disease.state, num.comps)
+    for ( i in 1:length(pop.by.age)){
+      mixing.matrix  [i, ]  =  pop.by.age[i]       # this produces a mixing matrix which is equivalent to uniform mixing
+    }
+    disease.state  =  demographics(disease.state, birth.rate, death.rate, time.step)
+    disease.state  =  migrants.l.per.year(disease.state, migrant.indices, time.step, l)
+    
+    beta  =  calibrate.beta(mixing.matrix, disease.state, max.age, time.step, infectious.period, R_0, list.of.ages, num.comps) * (1 + beta_1 * cos(2 * pi * t /365))
+    
+    list[disease.state, new.infections[run]]  =  draw.next.step.all(disease.state, mixing.matrix, infectious.indices, 
+                                                                time.step , infectious.period, beta,
+                                                                demographic.ages, num.comps, maternal.indices, 
+                                                                mat.immunity.loss, vacc.prop)
+    
+    all.infections[run]  =   sum(disease.state[infectious.indices])
+    prop.sus[run]        =   sum(disease.state[susceptible.indices]) / sum(disease.state)
+    if ((run %% 100 == 0) & (do.plots == 1)){
+      produce.plots(run, prop.sus, new.infections, all.infections, disease.state, susceptible.indices, num.comps)
+    }
+    t  =  t  +  time.step
+  }
+  return(list(disease.state, new.infections, all.infections, prop.sus))
+}
+
+
+
+
+###################################
+# Run simulations using an initial disease.state for a given number of years, where one infected individual is introduced at the beginning of each year, and the population is then aged between.
+# The population prior to the introductionInclude sia's in this 
+###################################
+Run.continuous.sims <- function(total.years, number.of.replicates, initial.disease.state, 
+                                mixing.matrix, infectious.indices, time.step, 
+                                infectious.period, beta_1, demographic.ages,
+                                num.comps, maternal.indices, 
+                                mat.immunity.loss, vacc.prop, 
+                                av.migrants.per.year, do.plots, 
+                                initial.time, min.age.sia, max.age.sia, 
+                                sia.proportion, list.of.ages,
+                                birth.rate, death.rate){
+  #
+  total.infections.by.year  =  matrix(0, number.of.replicates, total.years)
+  for (i in 1 : number.of.replicates){
+  #  print(paste('Started', i, 'of', number.of.replicates))
+    disease.state = initial.disease.state
+    disease.state[infectious.indices]  =  0
+   # print(sum(disease.state[susceptible.indices]) / sum(disease.state))
+    for ( j in 1 : total.years){
+      disease.state[infectious.indices[20]]  =  disease.state[infectious.indices[20]] + 1 
+      
+      list[disease.state, new.infections, all.infections, prop.sus] = Run.simulations(365, disease.state, mixing.matrix, 
+                                                                                      infectious.indices, birth.rate, death.rate,
+                                                                                      time.step , infectious.period,
+                                                                                      beta_1, demographic.ages, num.comps, 
+                                                                                      maternal.indices,  mat.immunity.loss, vacc.prop, 
+                                                                                      av.migrants.per.year, do.plots, initial.time)
+      
+      total.infections.by.year[i, j]  =  sum(new.infections)
+      
+      if ( j %% sia.period == 0){
+       # print(sum(disease.state[susceptible.indices]) / sum(disease.state))
+        disease.state  =  reduce.susceptibles(min.age.sia, max.age.sia, disease.state, sia.proportion, num.comps, susceptible.indices, recovered.indices, list.of.ages)
+      #  print(sum(disease.state[susceptible.indices]) / sum(disease.state))
+      }
+    }
+   # print(paste('Finished', i, 'of', number.of.replicates))
+  }
+  return(total.infections.by.year)
+}
+
+
+
+
+
+###################################
+# Run simulations in parallel using an initial disease.state for a given number of years, where one infected individual is introduced at the beginning of each year, and the population is then aged between.
+# The population prior to the introductionInclude sia's in this 
+###################################
+numerous.sims <- function(num.replicates, num.years, initial.disease.state1, initial.start.time){
+  infections.by.year = matrix(0, num.replicates, num.years)
+  state  =  matrix(0, num.replicates, length(initial.disease.state))
+  infections.by.year <- foreach (i = 1 : num.replicates, .export=ls(envir=globalenv())) %dopar%{
+    print(paste('Started', i, 'of', num.replicates))
+    infections.by.year[i,  ] <- Run.continuous.sims(num.years, 1, initial.disease.state1, mixing.matrix,
+                                                    infectious.indices, time.step , infectious.period, beta_1,
+                                                    demographic.ages, num.comps, maternal.indices, 
+                                                    mat.immunity.loss, vacc.prop, av.migrants.per.year, 
+                                                    do.plots, initial.start.time , min.age.sia, max.age.sia,
+                                                    sia.proportion, list.of.ages, birth.rate, death.rate)  
+  }
+  return(infections.by.year)
+}
+
+
+
+
+###################################
+# Run simulations where we can change the birth rate and vaccination rates multiple times
+###################################
+diff.br.vacc.sims <- function(initial.disease.state, 
+                              initial.start.time, multi.vacc, multi.br, 
+                              sia.years, sia.numbers, vacc.success,
+                              mixing.matrix, infectious.indices, input.infections.all.times, 
+                              death.rate, time.step , infectious.period, seasonal.scaling = beta_1,
+                              demographic.ages, num.comps, maternal.indices, init.pop.size,
+                              mat.immunity.loss, l  =  0, do.plots , initial.time = initial.start.time){
+  
+  sim.infs.by.year  =  matrix(0, length(multi.br), 1)
+  count = 1
+  input.disease.state = round(initial.disease.state * init.pop.size / sum(initial.disease.state))
+  for (i in 1: length(multi.br)){
+    #print(paste('On', i, 'of', length(multi.br)))
+    birth.rate  =  multi.br[i]
+    vacc  =  vacc.success*(multi.vacc[i]/100)
+    input.infections = 0
+    if( input.infections.all.times == 1){
+      input.infections = 1
+    }
+    if( i == length(multi.br)){
+      input.infections = 1
+    }
+    input.disease.state[infectious.indices[12]]  =   input.disease.state[infectious.indices[12]]   +  input.infections
+    list[disease.state, new.infections, all.infections, prop.sus]  =  Run.simulations(365, input.disease.state, mixing.matrix, infectious.indices,
+                                                                                      birth.rate, death.rate,
+                                                                                      time.step , infectious.period, seasonal.scaling = beta_1,
+                                                                                      demographic.ages, num.comps, maternal.indices, 
+                                                                                      mat.immunity.loss, vacc, l  =  0, do.plots , initial.time = initial.start.time)
+    if( count < (length(sia.years) + 1)){
+      if ( i == sia.years[count] ){
+        num  =  sia.numbers[count]
+        l = which(list.of.ages == 9/12)
+        k = which(list.of.ages == 5)
+        target.pop  =  sum(disease.state[((l * num.comps) + 1):(k * num.comps)])
+        total.prop.SIA  =  num / target.pop
+        print(total.prop.SIA)
+        disease.state  =  reduce.susceptibles(9/12, 5, disease.state, total.prop.SIA, num.comps, susceptible.indices, recovered.indices, list.of.ages)
+        count  =  count + 1
+      }  
+    }
+    
+    input.disease.state   =   disease.state
+    sim.infs.by.year[i]  =  sum(new.infections)
+  }
+  return(sim.infs.by.year)
+}
+
+
+
+
+###################################
+# In this function we can change the vaccination and birth rates multiple times
+# Run simulations in parallel using an initial disease.state for a given number of years, where one infected individual is introduced at the beginning of each year, and the population is then aged between.
+# The population prior to the introductionInclude sia's in this. 
+###################################
+numerous.sims.diff.br.vacc <- function(num.replicates, initial.disease.state1, 
+                                       initial.start.time, multi.vacc, multi.br, input.infections.all.times,
+                                       init.pop.size, sia.years, sia.numbers, vacc.success){
+  
+  sim.infs.by.year   =  matrix(0 , num.replicates, length(multi.br))
+  state  =  matrix(0, num.replicates, length(initial.disease.state))
+  sim.infs.by.year <- foreach (run = 1 : num.replicates, .export=ls(envir=globalenv()))    %dopar%  {
+
+    print(paste('Started', run, 'of', num.replicates))
+    sim.infs.by.year[run, ] = diff.br.vacc.sims (initial.disease.state1, 
+                                  initial.start.time, multi.vacc, multi.br, 
+                                  sia.years, sia.numbers, vacc.success, 
+                                  mixing.matrix, infectious.indices, input.infections.all.times,
+                                  death.rate, time.step , infectious.period, seasonal.scaling = beta_1,
+                                  demographic.ages, num.comps, maternal.indices, init.pop.size,
+                                  mat.immunity.loss, l  =  0, do.plots , initial.time = initial.start.time)
+  }
+  return(sim.infs.by.year)
+}
+
+
+
+
+###################################
+# Output coefficient of variation for 10 year periods, with 1 year moving window. 
+# Also output mean birth and vaccination rates along with cumulative incidence in those 10 years
+###################################
+output.coeff.of.var.and.other.variables <- function(x = 1){
+
+  cases.by.country.by.year = read.csv("Measles_cases_by_year.csv")
+  Birth.rates = read.csv("Birth_rates.csv")
+  pop.by.year = read.csv("Population_by-country_by_year.csv")
+  
+  
+  
+  African.pop.by.year = subset(pop.by.year, pop.by.year$WHO_REGION == "AFR")
+  African_vaccination = read.csv("African_vaccination_rates.csv", stringsAsFactors = FALSE)
+  African_birth_rates = subset(Birth.rates, Birth.rates$WHO_REGION == "AFR")
+  African_data = subset(cases.by.country.by.year, cases.by.country.by.year$WHO_REGION == "AFR")
+  
+  
+  
+  
+  coeff.var = matrix(0, length(African_data[ , 1]), 25)
+  for ( backwards in 0 : 24){
+    for ( i in 1 : length(African_data[ , 1])){
+      coeff.var[i, 25 - backwards]  =  sd(African_data[i, (5 + backwards):(14 + backwards)], na.rm = TRUE) /  mean(as.numeric(African_data[i, (5 + backwards):(14 + backwards)]), na.rm = TRUE)
+    }
+  }
+  
+  
+  
+  incidence.per.1000 = matrix(0, length(African_data[ , 1]), 25)
+  for ( backwards in 0 : 24){
+    for ( i in 1 : length(African_data[ , 1])){
+      incidence.per.1000[i, 25 - backwards]  =  sum(as.numeric(African_data[i,  (5 + backwards):(14 + backwards)]) / as.numeric(African.pop.by.year[i, (54 - backwards) : (45 - backwards)]), na.rm = TRUE) * 1000
+    }
+  }
+  
+  
+  
+  
+  mean.vac  =  matrix(0, length(African_vaccination[, 1]), 25) 
+  for (j in 0 : 24){
+    for ( i in 1 : length(African_vaccination[, 1])){
+      mean.vac[i, j + 1]  =  mean(as.numeric(African_vaccination[i, (2 + j):(11 + j)]), na.rm = TRUE)
+    }
+  }
+  
+  African_birth_rates$X2013 = African_birth_rates$X2012
+  African_birth_rates2 = African_birth_rates[, -54]
+  African_birth_rates2 =African_birth_rates2 [ ,-(1:20)]
+  mean.br  =  matrix(0, length(African_birth_rates[, 1]), 25) 
+  for (j in 0 : 24){
+    for ( i in 1 : length(African_birth_rates[, 1])){
+      mean.br[i, j+1]  =  mean(as.numeric(African_birth_rates2[i, (1 + j) : (10 + j)]), na.rm = TRUE)
+    }
+  }
+  
+  return(list(coeff.var, incidence.per.1000, mean.vac, mean.br))
+}
+
+
+
+
+
+
+
+###################################
+# Plot coeff of variance against incidence for a given period of time
+###################################
+plot.coeff.var <- function(African.countries, countries.to.plot, coeff.var, incidence.per.1000, mean.vac, mean.br, start.year, scaling){
+  k = NULL
+  if (length(countries.to.plot)  <  length(African.countries)){
+    for ( i in 1 : length(countries.to.plot)){
+      p = which(African.countries == countries.to.plot[i])
+      k = c(k, p)      
+    }
+  } else {k = seq(1, 47)}
+  j = start.year - 1979
+  African.cov = data.frame(labels1 = countries.to.plot, Coeff.of.var = coeff.var[k, j], Incidence = incidence.per.1000[k, j], BR = mean.br[k, j], mean.vacc = mean.vac[k, j], Inverse.BR = 1/mean.br[k, j])
+  quartz()
+  to.plot = ggplot(African.cov, aes(x = Coeff.of.var, y = Incidence, label = labels1)) 
+  if(scaling == 'log')
+  {
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc)) + scale_color_gradient(high = "blue", low = "red") + scale_y_continuous(limits = c(0.001, 100), trans= 'log10' ) + 
+      labs(x = "Coefficient of variation", y = "Incidence per 1000: 2004 - 2013")  + theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
+      geom_text(size = 3, angle = 45) 
+  }
+  
+  
+  
+  print(qqq1  )
+}

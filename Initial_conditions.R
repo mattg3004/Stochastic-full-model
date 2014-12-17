@@ -3,7 +3,13 @@ demographic.ages              =       round(read.csv("Pop_Zimbabwe.csv"))
 contacts                      <-      read.csv("Contacts.csv")
 uk.contacts                   =       read.csv("uk_contacts.csv")
 conts                         =       read.csv("contact_rate.csv")
+vacc.rates                    =       read.csv("African_vaccination_rates.csv")
+cases.by.year                 =       read.csv("Measles_cases_by_year.csv")
+Af_cases                      =       subset(cases.by.year, cases.by.year$WHO_REGION == "AFR")
+Birth.rates                   =       read.csv("Birth_rates.csv")
 initial.pop                   =       sum(demographic.ages[, 2])
+
+All.African.Countries = Af_cases$Cname
 
 ########################
 # Construct the mixing matrix which will be used for simulation. 
@@ -38,6 +44,7 @@ exposed.indices               =       seq(3, length(list.of.ages) * num.comps, n
 infectious.indices            =       seq(4, length(list.of.ages) * num.comps, num.comps)
 recovered.indices             =       seq(num.comps, length(list.of.ages) * num.comps, num.comps)
 
+
 oldest.migrant       =      15 
 migrant.indices      =      seq(4,  num.comps * (oldest.migrant + 13), num.comps)
 
@@ -58,6 +65,13 @@ mat.immunity.loss             =      matrix(1, length(maternal.indices), 1)
 #mat.immunity.loss[1:9]             =      c(0, 0, 0.1, 0.2, 0.3, 0.5, 0.8, 0.9, 1)
 mat.immunity.loss[1:8]             =      (1/(1+exp(-(seq(0,7,1) - 5))))
 
+
+min.age.sia  =  9/12
+max.age.sia  =  5
+sia.proportion = 0.6
+do.plots = 0
+sia.period  =  3
+av.migrants.per.year = 1
 #for (i in 1 : 8){
 #  mat.immunity.loss[i]             =    1  -  exp(-i * 0.03)
 #}
