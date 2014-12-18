@@ -713,7 +713,7 @@ numerous.sims.diff.br.vacc <- function(num.replicates, initial.disease.state1,
 # Output coefficient of variation for 10 year periods, with 1 year moving window. 
 # Also output mean birth and vaccination rates along with cumulative incidence in those 10 years
 ###################################
-output.coeff.of.var.and.other.variables <- function(x = 1){
+output.coeff.of.var.and.other.variables <- function(window.length){
 
   cases.by.country.by.year = read.csv("Measles_cases_by_year.csv")
   Birth.rates = read.csv("Birth_rates.csv")
@@ -727,41 +727,41 @@ output.coeff.of.var.and.other.variables <- function(x = 1){
   African_data = subset(cases.by.country.by.year, cases.by.country.by.year$WHO_REGION == "AFR")
   
   
+  num.windows = 25 + (10 - window.length)
   
-  
-  coeff.var = matrix(0, length(African_data[ , 1]), 25)
-  for ( backwards in 0 : 24){
+  coeff.var = matrix(0, length(African_data[ , 1]), num.windows)
+  for ( backwards in 0 : (num.windows - 1)){
     for ( i in 1 : length(African_data[ , 1])){
-      coeff.var[i, 25 - backwards]  =  sd(African_data[i, (5 + backwards):(14 + backwards)], na.rm = TRUE) /  mean(as.numeric(African_data[i, (5 + backwards):(14 + backwards)]), na.rm = TRUE)
+      coeff.var[i, num.windows - backwards]  =  sd(African_data[i, (5 + backwards):(5 + window.length - 1 + backwards )], na.rm = TRUE) /  mean(as.numeric(African_data[i, (5 + backwards):(5 + window.length - 1 + backwards)]), na.rm = TRUE)
     }
   }
   
   
   
-  incidence.per.1000 = matrix(0, length(African_data[ , 1]), 25)
-  for ( backwards in 0 : 24){
+  incidence.per.1000 = matrix(0, length(African_data[ , 1]), num.windows)
+  for ( backwards in 0 : (num.windows - 1)){
     for ( i in 1 : length(African_data[ , 1])){
-      incidence.per.1000[i, 25 - backwards]  =  sum(as.numeric(African_data[i,  (5 + backwards):(14 + backwards)]) / as.numeric(African.pop.by.year[i, (54 - backwards) : (45 - backwards)]), na.rm = TRUE) * 1000
+      incidence.per.1000[i, num.windows - backwards]  =  sum(as.numeric(African_data[i,  (5 + backwards):(5 + window.length - 1 + backwards)]) / as.numeric(African.pop.by.year[i, (54 - backwards) : (54 - (window.length - 1) - backwards)]), na.rm = TRUE) * 1000
     }
   }
   
   
   
   
-  mean.vac  =  matrix(0, length(African_vaccination[, 1]), 25) 
-  for (j in 0 : 24){
+  mean.vac  =  matrix(0, length(African_vaccination[, 1]), num.windows) 
+  for (j in 0 :  (num.windows - 1)){
     for ( i in 1 : length(African_vaccination[, 1])){
-      mean.vac[i, j + 1]  =  mean(as.numeric(African_vaccination[i, (2 + j):(11 + j)]), na.rm = TRUE)
+      mean.vac[i, j + 1]  =  mean(as.numeric(African_vaccination[i, (2 + j):(2 + window.length - 1  + j )]), na.rm = TRUE)
     }
   }
   
   African_birth_rates$X2013 = African_birth_rates$X2012
   African_birth_rates2 = African_birth_rates[, -54]
   African_birth_rates2 =African_birth_rates2 [ ,-(1:20)]
-  mean.br  =  matrix(0, length(African_birth_rates[, 1]), 25) 
-  for (j in 0 : 24){
+  mean.br  =  matrix(0, length(African_birth_rates[, 1]), num.windows) 
+  for (j in 0 :  (num.windows - 1)){
     for ( i in 1 : length(African_birth_rates[, 1])){
-      mean.br[i, j+1]  =  mean(as.numeric(African_birth_rates2[i, (1 + j) : (10 + j)]), na.rm = TRUE)
+      mean.br[i, j+1]  =  mean(as.numeric(African_birth_rates2[i, (1 + j) : (1 + window.length - 1  + j)]), na.rm = TRUE)
     }
   }
   
@@ -777,7 +777,12 @@ output.coeff.of.var.and.other.variables <- function(x = 1){
 ###################################
 # Plot coeff of variance against incidence for a given period of time
 ###################################
-plot.coeff.var <- function(African.countries, countries.to.plot, coeff.var, incidence.per.1000, mean.vac, mean.br, start.year, scaling){
+plot.coeff.var <- function(African.countries, countries.to.plot, 
+                           start.year, window.length, 
+                           scaling, text.size){
+  
+  list[coeff.var, incidence.per.1000, mean.vac, mean.br] = output.coeff.of.var.and.other.variables(window.length)
+  
   k = NULL
   if (length(countries.to.plot)  <  length(African.countries)){
     for ( i in 1 : length(countries.to.plot)){
@@ -787,12 +792,33 @@ plot.coeff.var <- function(African.countries, countries.to.plot, coeff.var, inci
   } else {k = seq(1, 47)}
   j = start.year - 1979
   African.cov = data.frame(labels1 = countries.to.plot, Coeff.of.var = coeff.var[k, j], Incidence = incidence.per.1000[k, j], BR = mean.br[k, j], mean.vacc = mean.vac[k, j], Inverse.BR = 1/mean.br[k, j])
-  quartz()
+  #quartz()
   to.plot = ggplot(African.cov, aes(x = Coeff.of.var, y = Incidence, label = labels1)) 
+  if(scaling == 'none')
+  {
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc)) + scale_color_gradient(high = "blue", low = "red") +
+      scale_y_continuous(limits = c(0, 100) ) + scale_x_continuous(limits = c(0, 3.5) ) +
+      labs(x = "Coefficient of variation", y = paste('Incidence per 1000:',toString(start.year),'-',toString(start.year + window.length - 1)))  +
+      theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
+      geom_text(size = text.size, angle = 45) 
+  }
+  
+  
   if(scaling == 'log')
   {
-    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc)) + scale_color_gradient(high = "blue", low = "red") + scale_y_continuous(limits = c(0.001, 100), trans= 'log10' ) + 
-      labs(x = "Coefficient of variation", y = "Incidence per 1000: 2004 - 2013")  + theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc)) + scale_color_gradient(high = "blue", low = "red") +
+      scale_y_continuous(limits = c(0.001, 100), trans= 'log10' ) + scale_x_continuous(limits = c(0, 3.5) ) +
+      labs(x = "Coefficient of variation", y = paste('Incidence per 1000:',toString(start.year),'-',toString(start.year + window.length - 1)))  +
+      theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
+      geom_text(size = 3, angle = 45) 
+  }
+  
+  if(scaling == 'sqrt')
+  {
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc)) + scale_color_gradient(high = "blue", low = "red") +
+      scale_y_continuous(limits = c(0, 100), trans= 'sqrt' ) + scale_x_continuous(limits = c(0, 3.5) ) +
+      labs(x = "Coefficient of variation", y = paste('Incidence per 1000:',toString(start.year),'-',toString(start.year + window.length - 1)))  +
+      theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
       geom_text(size = 3, angle = 45) 
   }
   
