@@ -21,8 +21,8 @@ list[d2,  new.infs, all.infss, prop.sus] = Run.simulations (num.steps, disease.s
                                                             demographic.ages, num.comps, maternal.indices, 
                                                             mat.immunity.loss, vacc.prop, l, do.plots = 1, initial.time = 280)
 
-
-disease.state[infectious.indices[10] ] = 1
+disease.state.2 = d2
+disease.state.2[infectious.indices[10] ] = 1
 list[d2,  new.infs, all.infss, prop.sus]  = Run.simulations (365, disease.state.2, mixing.matrix, infectious.indices,
                  birth.rate, death.rate,
                  time.step , infectious.period, beta_1,

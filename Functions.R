@@ -561,7 +561,7 @@ Run.simulations <- function(num.steps, disease.state, mixing.matrix, infectious.
 
 ###################################
 # Run simulations using an initial disease.state for a given number of years, where one infected individual is introduced at the beginning of each year, and the population is then aged between.
-# The population prior to the introductionInclude sia's in this 
+# The population prior to the introduction Include sia's in this 
 ###################################
 Run.continuous.sims <- function(total.years, number.of.replicates, initial.disease.state, 
                                 mixing.matrix, infectious.indices, time.step, 
@@ -715,14 +715,14 @@ numerous.sims.diff.br.vacc <- function(num.replicates, initial.disease.state1,
 ###################################
 output.coeff.of.var.and.other.variables <- function(window.length){
 
-  cases.by.country.by.year = read.csv("Measles_cases_by_year.csv")
-  Birth.rates = read.csv("Birth_rates.csv")
-  pop.by.year = read.csv("Population_by-country_by_year.csv")
+ # cases.by.country.by.year = read.csv("Measles_cases_by_year.csv")
+ # Birth.rates = read.csv("Birth_rates.csv")
+ # pop.by.year = read.csv("Population_by-country_by_year.csv")
   
   
   
   African.pop.by.year = subset(pop.by.year, pop.by.year$WHO_REGION == "AFR")
-  African_vaccination = read.csv("African_vaccination_rates.csv", stringsAsFactors = FALSE)
+  #African_vaccination = read.csv("African_vaccination_rates.csv", stringsAsFactors = FALSE)
   African_birth_rates = subset(Birth.rates, Birth.rates$WHO_REGION == "AFR")
   African_data = subset(cases.by.country.by.year, cases.by.country.by.year$WHO_REGION == "AFR")
   
@@ -733,6 +733,11 @@ output.coeff.of.var.and.other.variables <- function(window.length){
   for ( backwards in 0 : (num.windows - 1)){
     for ( i in 1 : length(African_data[ , 1])){
       coeff.var[i, num.windows - backwards]  =  sd(African_data[i, (5 + backwards):(5 + window.length - 1 + backwards )], na.rm = TRUE) /  mean(as.numeric(African_data[i, (5 + backwards):(5 + window.length - 1 + backwards)]), na.rm = TRUE)
+      if(is.na( mean(as.numeric(African_data[i, (5 + backwards):(5 + window.length - 1 + backwards)]), na.rm = TRUE)) == FALSE ){
+        if( mean(as.numeric(African_data[i, (5 + backwards):(5 + window.length - 1 + backwards)]), na.rm = TRUE) == 0) {
+          coeff.var[i, num.windows - backwards]  =  0
+        } 
+      }
     }
   }
   
@@ -778,10 +783,68 @@ output.coeff.of.var.and.other.variables <- function(window.length){
 # Plot coeff of variance against incidence for a given period of time
 ###################################
 plot.coeff.var <- function(African.countries, countries.to.plot, 
-                           start.year, window.length, 
-                           scaling, text.size){
+                           start.year, coeff.var, incidence.per.1000, 
+                           mean.vac, mean.br, window.length, 
+                           scaling, text.size, upper.limit, column.number ){
   
-  list[coeff.var, incidence.per.1000, mean.vac, mean.br] = output.coeff.of.var.and.other.variables(window.length)
+  
+  
+  k = NULL
+  if (length(countries.to.plot)  <  length(African.countries)){
+    for ( i in 1 : length(countries.to.plot)){
+      p = which(African.countries == countries.to.plot[i])
+      k = c(k, p)      
+    }
+  } else {k = seq(1, 47)}
+  j = start.year - 1979
+  j = column.number
+  African.cov = data.frame(labels1 = countries.to.plot, Coeff.of.var = coeff.var[k, j], Incidence = incidence.per.1000[k, j], BR = mean.br[k, j], mean.vacc = mean.vac[k, j], Inverse.BR = 1/mean.br[k, j])
+  #quartz()
+  to.plot = ggplot(African.cov, aes(x = Coeff.of.var, y = Incidence, label = labels1)) 
+  if(scaling == 'none')
+  {
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc)) + scale_color_gradient(high = "blue", low = "red") +
+      scale_y_continuous(limits = c(0, upper.limit) ) + scale_x_continuous(limits = c(0, 3.5) ) +
+      labs(x = "Coefficient of variation", y = paste('Incidence per 1000:',toString(start.year),'-',toString(start.year + window.length - 1)))  +
+      theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
+      geom_text(size = text.size, angle = 45) 
+  }
+  
+  
+  if(scaling == 'log')
+  {
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc)) + scale_color_gradient(high = "blue", low = "red") +
+      scale_y_continuous(limits = c(0.001, upper.limit), trans= 'log10' ) + scale_x_continuous(limits = c(0, 3.5) ) +
+      labs(x = "Coefficient of variation", y = paste('Incidence per 1000:',toString(start.year),'-',toString(start.year + window.length - 1)))  +
+      theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
+      geom_text(size = 3, angle = 45) 
+  }
+  
+  if(scaling == 'sqrt')
+  {
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc)) + scale_color_gradient(high = "blue", low = "red") +
+      scale_y_continuous(limits = c(0, upper.limit), trans = 'sqrt' ) + scale_x_continuous(limits = c(0, 3.5) ) +
+      labs(x = "Coefficient of variation", y = paste('Incidence per 1000:',toString(start.year),'-',toString(start.year + window.length - 1)))  +
+      theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
+      geom_text(size = 3, angle = 45) 
+  }
+  
+  
+  
+  print(qqq1)
+}
+
+
+
+
+###################################
+# Plot coeff of variance against incidence for a given period of time
+###################################
+plot.coeff.var.with.inputs <- function(African.countries, countries.to.plot, 
+                                       start.year, window.length, 
+                                       scaling, text.size){
+  
+ 
   
   k = NULL
   if (length(countries.to.plot)  <  length(African.countries)){
@@ -825,4 +888,115 @@ plot.coeff.var <- function(African.countries, countries.to.plot,
   
   
   print(qqq1  )
+}
+
+
+
+
+
+
+###################################
+# Plots animation
+###################################
+coeff.vs.incidence.plot <- function(countries.to.plot, scaling, text.size, ani.h, ani.w ){
+  library(igraph)
+  library(animation)
+  library(ggplot2)
+  
+  ani.record(reset=TRUE)
+  start.year  =  1980
+  if (countries.to.plot == 'All'){
+    countries.to.plot = African.countries  
+  }
+  for ( i in 1 : (length(coeff.var[1, ])-1)){
+    plot.coeff.var.with.inputs(African.countries, countries.to.plot, start.year+i, 
+                                window.length = 10, scaling, text.size )
+    ani.record()
+  }
+  oopts = ani.options(interval = 0.5)
+  ani.replay()
+  
+  saveHTML(ani.replay(), ani.height = ani.h,  ani.width = ani.w)
+
+}
+
+
+
+
+###################################
+# Output data for animation
+###################################
+output.coeff.vs.incidence.data <- function(window.length, interp.resolution ){
+  list[coeff.var2, incidence.per.10002, mean.vac2, mean.br2] = output.coeff.of.var.and.other.variables(window.length)
+  coeff.var = matrix(0, length(coeff.var2[, 1]), interp.resolution * ( length(coeff.var2[1, ])-1) + 1)
+  incidence.per.1000 = matrix(0, length(coeff.var2[, 1]), interp.resolution * (length(coeff.var2[1, ])-1) + 1)
+  mean.vac = matrix(0, length(coeff.var2[, 1]), interp.resolution * (length(coeff.var2[1, ])-1) + 1)
+  mean.br = matrix(0, length(coeff.var2[, 1]), interp.resolution * (length(coeff.var2[1, ])-1) + 1)
+  
+  for( i in 1 : length(coeff.var2[1, ])){
+    coeff.var[, ((i-1)* interp.resolution) + 1]  =   coeff.var2[, i]
+    incidence.per.1000[, ((i-1)* interp.resolution) + 1]  =   incidence.per.10002[, i]
+    mean.vac[, ((i-1)* interp.resolution) + 1]  =   mean.vac2[, i]
+    mean.br[, ((i-1)* interp.resolution) + 1]  =   mean.br2[, i]
+  }
+  
+  for(i in 1 : (length(coeff.var2[1, ]) - 1 )){
+    for(j in 1 : (interp.resolution - 1)){
+      coeff.var[, ((i-1)* interp.resolution) + 1 + j]  =  coeff.var2[, i]  + (coeff.var2[, i + 1] - coeff.var2[, i]) * j / interp.resolution
+      incidence.per.1000[, ((i-1)* interp.resolution) + 1 + j]  =  incidence.per.10002[, i]  + (incidence.per.10002[, i + 1] - incidence.per.10002[, i]) * j / interp.resolution
+      mean.vac[, ((i-1)* interp.resolution) + 1 + j]  =  mean.vac2[, i]  + (mean.vac2[, i + 1] - mean.vac2[, i]) * j / interp.resolution
+      mean.br[, ((i-1)* interp.resolution) + 1 + j]  =  mean.br2[, i]  + (mean.br2[, i + 1] - mean.br2[, i]) * j / interp.resolution
+    }
+  }
+  
+  return( list(coeff.var, incidence.per.1000, mean.vac, mean.br))
+  
+}
+
+
+
+
+
+
+###################################
+# Output data for google bubble chart
+###################################
+output.data.for.animation <- function(window.length, interp.resolution){
+  
+  list[coeff.var, incidence.per.1000, mean.vac, mean.br]  <- output.coeff.vs.incidence.data(window.length, interp.resolution )
+  
+  
+  count = 1
+  anim.data = matrix(0, (length(coeff.var[, 1])) * length(coeff.var[1, ]), 6)
+  anim.data  =  data.frame(anim.data)
+  colnames(anim.data) = c("Country", "Coefficient.of.Variation", "Incidence", "Mean.vaccination", "Mean.birth.rate", "Year")
+  
+  for(i in 1:length(coeff.var[1, ])){
+    anim.data$Country[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  African_vaccination$Country
+    anim.data$Coefficient.of.Variation[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  round(as.numeric(coeff.var[, i]),2)
+    anim.data$Incidence[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  round(as.numeric(incidence.per.1000[, i]),2)
+    anim.data$Mean.vaccination[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  round(as.numeric(mean.vac[, i]),  2)
+    anim.data$Mean.birth.rate[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  round(as.numeric(mean.br[, i]), 2)
+    anim.data$Year[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  (1980 + (i-1) / interp.resolution)
+    
+    count  =  count + 1
+  }
+  anim.data2 = matrix(0, (length(coeff.var[, 1])) * length(coeff.var[1, ]) + 2 * length(unique(anim.data$Year)), 6)
+  anim.data2  =  data.frame(anim.data2)
+  colnames(anim.data2) = c("Country", "Coefficient.of.Variation", "Incidence", "Mean.vaccination", "Mean.birth.rate", "Year")
+  anim.data2[1:length(anim.data[, 1]), ]  =  anim.data[]
+  anim.data2[(length(anim.data[, 1]) + 1) : length(anim.data2[, 1]), 6]  =  c(unique(anim.data$Year),unique(anim.data$Year))
+  anim.data2[(length(anim.data[, 1]) + 1) : length(anim.data2[, 1]), 1]  =  ""
+  for(i in 1 : length(unique(anim.data$Year))){
+    t  =  subset(anim.data, anim.data$Year ==  unique(anim.data$Year)[i])
+    anim.data2[(length(anim.data[, 1]) + i) , 4]  =  0
+    anim.data2[(length(anim.data[, 1]) + i)  , 5]  =  min(t$Mean.birth.rate)
+  }
+  
+  for(i in 1 : length(unique(anim.data$Year))){
+    t  =  subset(anim.data, anim.data$Year ==  unique(anim.data$Year)[i])
+    anim.data2[(length(anim.data[, 1]) + length(unique(anim.data$Year)) +  i) , 4]  =  100
+    anim.data2[(length(anim.data[, 1]) + length(unique(anim.data$Year)) +  i) , 5]  =  min(t$Mean.birth.rate)
+  }
+  return(anim.data2)
 }
