@@ -43,35 +43,100 @@ shinyUI(fluidPage(
     radioButtons(
       inputId = "radio",
       label   = "Variable Selection Type:",
-      choices =  c("All", subset(unique(as.character(anim.data$WHO_REGION)), unique(as.character(anim.data$WHO_REGION)) !="") ),# subset(unique(as.character(anim.data$WHO_REGION)), unique(as.character(anim.data$WHO_REGION)) !="")),#,unique(as.character(anim.data$WHO_REGION))),
+      choices =  c("All", regions),# subset(unique(as.character(anim.data$WHO_REGION)), unique(as.character(anim.data$WHO_REGION)) !="") ),# subset(unique(as.character(anim.data$WHO_REGION)), unique(as.character(anim.data$WHO_REGION)) !="")),#,unique(as.character(anim.data$WHO_REGION))),
       selected="All"),
-
- #   conditionalPanel(
-#      condition = "input$radio == regions[1]",
-#        checkboxGroupInput(
-#        inputId = "country",  # ID to be used in server.R
-#        label="Select Region:",
-#        choices= unique(as.character(anim.data$WHO_REGION)), 
-#        selected = countries.to.plot
-#      ),
-#    ),
     
-  # conditionalPanel(
-  #   condition = "input.radio == 'Manual Select'",
-  #    checkboxGroupInput(
+  #  conditionalPanel(
+  #    condition = "input.radio == regions[1]",
   #      inputId = "country",  # ID to be used in server.R
-  #      label="Select Countries:",
-  #      choices= unique(as.character(anim.data$Country)), 
-  #      selected = c()
-  #    )
+  #      checkboxGroupInput(
+  #      label="Select Region:",
+  #      choices= unique(as.character(anim.data$WHO_REGION)), 
+  #      selected = countries.to.plot
+  #    ),
+  #  ),
+    
+  #conditionalPanel(
+  #  condition = "input.radio == 'Manual Select'",
+  #  checkboxGroupInput(
+  #    inputId = "country",  # ID to be used in server.R
+  #    label="Select Countries:",
+  #    choices= unique(as.character(anim.data$Country)), 
+  #    selected = unique(as.character(anim.data$Country))
+  #  )
+  #),
+  
+   conditionalPanel(
+     condition = "input.radio == 'All'",
+      checkboxGroupInput(
+        inputId = "country",  # ID to be used in server.R
+        label="Select Countries:",
+        choices= unique(as.character(anim.data$Country)), 
+        selected = unique(as.character(anim.data$Country))
+      )
+   ),
+  conditionalPanel(
+    condition = "input.radio == 'AFR'",
+    checkboxGroupInput(
+      inputId = id.names[3],  # ID to be used in server.R
+      label ="Select Countries:",
+      choices= unique(subset(anim.data, anim.data$WHO_REGION == "AFR")$Country), 
+      selected = unique(subset(anim.data, anim.data$WHO_REGION == "AFR")$Country)
+    )
+  ),
+  conditionalPanel(
+    condition = "input.radio == 'EUR'",
+    checkboxGroupInput(
+      inputId = id.names[2],  # ID to be used in server.R
+      label="Select Countries:",
+      choices= unique(subset(anim.data, anim.data$WHO_REGION == "EUR")$Country), 
+      selected = unique(subset(anim.data, anim.data$WHO_REGION == "EUR")$Country)
+    )
+  ),
+  conditionalPanel(
+    condition = "input.radio == 'EMR'",
+    checkboxGroupInput(
+      inputId = id.names[1],  # ID to be used in server.R
+      label="Select Countries:",
+      choices= unique(subset(anim.data, anim.data$WHO_REGION == "EMR")$Country), 
+      selected = unique(subset(anim.data, anim.data$WHO_REGION == "EMR")$Country)
+    )
+  ),
+  conditionalPanel(
+    condition = "input.radio == 'WPR'",
+    checkboxGroupInput(
+      inputId = id.names[5],  # ID to be used in server.R
+      label="Select Countries:",
+      choices= unique(subset(anim.data, anim.data$WHO_REGION == "WPR")$Country), 
+      selected = unique(subset(anim.data, anim.data$WHO_REGION == "WPR")$Country)
+    )
+  ),
+  conditionalPanel(
+    condition = "input.radio == 'AMR'",
+    checkboxGroupInput(
+      inputId = id.names[4],  # ID to be used in server.R
+      label="Select Countries:",
+      choices= unique(subset(anim.data, anim.data$WHO_REGION == "AMR")$Country), 
+      selected = unique(subset(anim.data, anim.data$WHO_REGION == "AMR")$Country)
+    )
+  ),
+  conditionalPanel(
+    condition = "input.radio == 'SEAR'",
+    checkboxGroupInput(
+      inputId = id.names[6],  # ID to be used in server.R
+      label="Select Countries:",
+      choices= unique(subset(anim.data, anim.data$WHO_REGION == "SEAR")$Country), 
+      selected = unique(subset(anim.data, anim.data$WHO_REGION == "SEAR")$Country)
+    )
+  )
   #  )#,
     
-    checkboxGroupInput(inputId  =  "country",  # ID to be used in server.R
-                      label    =  "Select Countries:",
-                       choices  =  unique(as.character(anim.data$Country)),
+  #  checkboxGroupInput(inputId  =  "country",  # ID to be used in server.R
+  #                    label    =  "Select Countries:",
+  #                     choices  =  unique(as.character(anim.data$Country)),
                        #choices  =  subset(unique(as.character(anim.data$Country)), unique(as.character(anim.data$Country)) != "None"),
-                       selected =  unique(as.character(anim.data$Country))
-     )
+  #                     selected =  unique(as.character(anim.data$Country))
+  #   )
     ),
   mainPanel(googleBubbleChart("chart",
                               width="100%", height = "600px",
