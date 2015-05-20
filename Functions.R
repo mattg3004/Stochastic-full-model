@@ -30,12 +30,13 @@ initial.disease.state <- function(demographic.ages  ,   initial.prop.susceptible
 # The proportion who are removed is given by the proportion.sus.to.remove variable
 # Can be used to do supplementary vaccination
 #############################
-reduce.susceptibles <- function(min.age, max.age, disease.state, proportion.sus.to.remove, num.comps, susceptible.indices, recovered.indices, list.of.ages){
+reduce.susceptibles <- function(min.age, max.age, disease.state, proportion.sus.to.remove, num.comps, 
+                                susceptible.indices, recovered.indices, list.of.ages, vacc.success){
   k = which(list.of.ages == min.age)
   l = which(list.of.ages == max.age)
   susceptibles  =  susceptible.indices[k: l]
-  disease.state [ recovered.indices[k:l]]  = round(disease.state [ recovered.indices[k:l]]   +    ( disease.state[ susceptibles  ] * ( proportion.sus.to.remove ) ))
-  disease.state [ susceptibles ]  =   round((disease.state[ susceptibles ] * ( 1 - proportion.sus.to.remove ) ) )
+  disease.state [ recovered.indices[k:l]]  = round(disease.state [ recovered.indices[k:l]]   +    vacc.success * ( disease.state[ susceptibles  ] * ( proportion.sus.to.remove ) )) 
+  disease.state [ susceptibles ]  =   round(vacc.success * (disease.state[ susceptibles ] * ( 1 - proportion.sus.to.remove ) ) )
   return(disease.state)
 }
 
@@ -365,6 +366,8 @@ age.under1 <- function(disease.state, mixing.matrix, infectious.indices,
                                   demographic.ages, num.comps, maternal.indices, 
                                   mat.immunity.loss, vacc.prop){
   
+  
+  
   updated.state =  matrix(0, length(disease.state), 1)
   
   foi.ages  <-   matrix(0, length(disease.state[infectious.indices]), 1)
@@ -440,12 +443,12 @@ age.population <- function(disease.state, mixing.matrix, infectious.indices,
                                mat.immunity.loss, vacc.prop){
   
   updated.state.under1  =  age.under1(disease.state, mixing.matrix, infectious.indices, 
-                                          time.step , infectious.period,
+                                          time.step , infectious.period, beta,
                                           demographic.ages, num.comps, maternal.indices, 
                                           mat.immunity.loss, vacc.prop)
   
   updated.state.over1   =  age.over1(disease.state, mixing.matrix, infectious.indices, 
-                                         time.step , infectious.period,
+                                         time.step , infectious.period, beta,
                                          demographic.ages, num.comps)
   
   updated.state  =  updated.state.under1   +   updated.state.over1
@@ -459,7 +462,7 @@ age.population <- function(disease.state, mixing.matrix, infectious.indices,
 # Function which will perform aging of the population along with taking care of demographics for a given length of time
 ###############################
 age.population.with.demographics <- function(disease.state, mixing.matrix, infectious.indices, 
-                                              time.step , infectious.period, 
+                                              time.step , infectious.period, beta,
                                               demographic.ages, num.comps, maternal.indices, 
                                               mat.immunity.loss, vacc.prop, num.steps){
   
@@ -532,6 +535,11 @@ Run.simulations <- function(num.steps, disease.state, mixing.matrix, infectious.
   all.infections  =  matrix(0, num.steps, 1)
   prop.sus        =  matrix(0, num.steps, 1)
   for (run in 1 : num.steps){
+    #  print(sum(disease.state[susceptible.indices]) / sum(disease.state))
+    # print(vacc.prop)
+    if(run %% 50 == 0){
+      #   plot(calc.sus.by.age(disease.state, susceptible.indices, num.comps))
+    }
     pop.by.age  =  population.by.age(disease.state, num.comps)
     for ( i in 1:length(pop.by.age)){
       mixing.matrix  [i, ]  =  pop.by.age[i]       # this produces a mixing matrix which is equivalent to uniform mixing
@@ -540,11 +548,13 @@ Run.simulations <- function(num.steps, disease.state, mixing.matrix, infectious.
     disease.state  =  migrants.l.per.year(disease.state, migrant.indices, time.step, l)
     
     beta  =  calibrate.beta(mixing.matrix, disease.state, max.age, time.step, infectious.period, R_0, list.of.ages, num.comps) * (1 + beta_1 * cos(2 * pi * t /365))
-    
+    if (vacc.prop > 1){
+      vacc.prop  =  vacc.prop / 100
+    }
     list[disease.state, new.infections[run]]  =  draw.next.step.all(disease.state, mixing.matrix, infectious.indices, 
-                                                                time.step , infectious.period, beta,
-                                                                demographic.ages, num.comps, maternal.indices, 
-                                                                mat.immunity.loss, vacc.prop)
+                                                                    time.step , infectious.period, beta,
+                                                                    demographic.ages, num.comps, maternal.indices, 
+                                                                    mat.immunity.loss, vacc.prop)
     
     all.infections[run]  =   sum(disease.state[infectious.indices])
     prop.sus[run]        =   sum(disease.state[susceptible.indices]) / sum(disease.state)
@@ -555,6 +565,7 @@ Run.simulations <- function(num.steps, disease.state, mixing.matrix, infectious.
   }
   return(list(disease.state, new.infections, all.infections, prop.sus))
 }
+
 
 
 
@@ -607,7 +618,8 @@ Run.continuous.sims <- function(total.years, number.of.replicates, initial.disea
 
 
 ###################################
-# Run simulations in parallel using an initial disease.state for a given number of years, where one infected individual is introduced at the beginning of each year, and the population is then aged between.
+# Run simulations in parallel using an initial disease.state for a given number of years, 
+# where one infected individual is introduced at the beginning of each year, and the population is then aged between.
 # The population prior to the introductionInclude sia's in this 
 ###################################
 numerous.sims <- function(num.replicates, num.years, initial.disease.state1, initial.start.time){
@@ -637,15 +649,23 @@ diff.br.vacc.sims <- function(initial.disease.state,
                               mixing.matrix, infectious.indices, input.infections.all.times, 
                               death.rate, time.step , infectious.period, seasonal.scaling = beta_1,
                               demographic.ages, num.comps, maternal.indices, init.pop.size,
-                              mat.immunity.loss, l  =  0, do.plots , initial.time = initial.start.time){
+                              mat.immunity.loss, l  , do.plots , 
+                              initial.time = initial.start.time, unreached.pop,
+                              vacc.efficiency, additional.campaigns.in.large.outbreak,
+                              large.outbreak.threshold, additional.campaign.size,
+                              constant.sia.prop, sia.prop){
   
+  
+  #print(l)
   sim.infs.by.year  =  matrix(0, length(multi.br), 1)
+  incidence.by.year  =  matrix(0, length(multi.br), 1)
   count = 1
   input.disease.state = round(initial.disease.state * init.pop.size / sum(initial.disease.state))
   for (i in 1: length(multi.br)){
+    
     #print(paste('On', i, 'of', length(multi.br)))
     birth.rate  =  multi.br[i]
-    vacc  =  vacc.success*(multi.vacc[i]/100)
+    vacc  =  max((vacc.success*(multi.vacc[i]/100)) - unreached.pop, 0)
     input.infections = 0
     if( input.infections.all.times == 1){
       input.infections = 1
@@ -658,24 +678,35 @@ diff.br.vacc.sims <- function(initial.disease.state,
                                                                                       birth.rate, death.rate,
                                                                                       time.step , infectious.period, seasonal.scaling = beta_1,
                                                                                       demographic.ages, num.comps, maternal.indices, 
-                                                                                      mat.immunity.loss, vacc, l  =  0, do.plots , initial.time = initial.start.time)
+                                                                                      mat.immunity.loss, vacc, l , do.plots , initial.time = initial.start.time)
     if( count < (length(sia.years) + 1)){
       if ( i == sia.years[count] ){
         num  =  sia.numbers[count]
-        l = which(list.of.ages == 9/12)
+        p = which(list.of.ages == 9/12)
         k = which(list.of.ages == 5)
-        target.pop  =  sum(disease.state[((l * num.comps) + 1):(k * num.comps)])
-        total.prop.SIA  =  num / target.pop
-        print(total.prop.SIA)
-        disease.state  =  reduce.susceptibles(9/12, 5, disease.state, total.prop.SIA, num.comps, susceptible.indices, recovered.indices, list.of.ages)
+        target.pop  =  sum(disease.state[((p * num.comps) + 1):(k * num.comps)])
+        total.prop.SIA  =  max(0, (vacc.success * (num / target.pop) * vacc.efficiency) - unreached.pop)
+        total.prop.SIA  =  min(1, total.prop.SIA)
+        if(constant.sia.prop == 1){
+          total.prop.SIA  =  sia.prop
+        }
+        # print(paste("population =",sum(disease.state),"target population =", target.pop))
+        #  print(total.prop.SIA)
+        disease.state  =  reduce.susceptibles(9/12, 5, disease.state, total.prop.SIA, num.comps, 
+                                              susceptible.indices, recovered.indices, list.of.ages, vacc.success)
         count  =  count + 1
       }  
     }
     
-    input.disease.state   =   disease.state
-    sim.infs.by.year[i]  =  sum(new.infections)
+    input.disease.state   =  disease.state
+    sim.infs.by.year[i]   =  sum(new.infections)
+    incidence.by.year[i]  =  1000*( sum(new.infections) / sum(disease.state) )
+    if ( (sum(new.infections) > large.outbreak.threshold) & (additional.campaigns.in.large.outbreak == 1)){
+      disease.state  =  reduce.susceptibles(9/12, 5, disease.state, additional.campaign.size, num.comps, 
+                                            susceptible.indices, recovered.indices, list.of.ages, vacc.success)
+    }
   }
-  return(sim.infs.by.year)
+  return(list(sim.infs.by.year, incidence.by.year))
 }
 
 
@@ -683,25 +714,36 @@ diff.br.vacc.sims <- function(initial.disease.state,
 
 ###################################
 # In this function we can change the vaccination and birth rates multiple times
-# Run simulations in parallel using an initial disease.state for a given number of years, where one infected individual is introduced at the beginning of each year, and the population is then aged between.
-# The population prior to the introductionInclude sia's in this. 
+# Run simulations in parallel using an initial disease.state for a given number of years, 
+# where one infected individual is introduced at the beginning of each year, and the population is then aged between.
 ###################################
 numerous.sims.diff.br.vacc <- function(num.replicates, initial.disease.state1, 
-                                       initial.start.time, multi.vacc, multi.br, input.infections.all.times,
-                                       init.pop.size, sia.years, sia.numbers, vacc.success){
+                                       initial.start.time, multi.vacc, multi.br, 
+                                       input.infections.all.times, init.pop.size, 
+                                       sia.years, sia.numbers, vacc.success,
+                                       num.migrants.per.year, unreached.pop,
+                                       vacc.efficiency, additional.campaigns.in.large.outbreak,
+                                       large.outbreak.threshold, additional.campaign.size,
+                                       constant.sia.prop, sia.prop){
   
-  sim.infs.by.year   =  matrix(0 , num.replicates, length(multi.br))
+  sim.infs.by.year   = list()
   state  =  matrix(0, num.replicates, length(initial.disease.state))
   sim.infs.by.year <- foreach (run = 1 : num.replicates, .export=ls(envir=globalenv()))    %dopar%  {
-
+    
     print(paste('Started', run, 'of', num.replicates))
-    sim.infs.by.year[run, ] = diff.br.vacc.sims (initial.disease.state1, 
-                                  initial.start.time, multi.vacc, multi.br, 
-                                  sia.years, sia.numbers, vacc.success, 
-                                  mixing.matrix, infectious.indices, input.infections.all.times,
-                                  death.rate, time.step , infectious.period, seasonal.scaling = beta_1,
-                                  demographic.ages, num.comps, maternal.indices, init.pop.size,
-                                  mat.immunity.loss, l  =  0, do.plots , initial.time = initial.start.time)
+    sim.infs.by.year[[run ]] = diff.br.vacc.sims (initial.disease.state1, 
+                                                  initial.start.time, multi.vacc, multi.br, 
+                                                  sia.years, sia.numbers, vacc.success, 
+                                                  mixing.matrix, infectious.indices, input.infections.all.times,
+                                                  death.rate, time.step , infectious.period, seasonal.scaling = beta_1,
+                                                  demographic.ages, num.comps, maternal.indices, init.pop.size,
+                                                  mat.immunity.loss, l = num.migrants.per.year, do.plots , 
+                                                  initial.time = initial.start.time, unreached.pop,
+                                                  vacc.efficiency, additional.campaigns.in.large.outbreak,
+                                                  large.outbreak.threshold, additional.campaign.size,
+                                                  constant.sia.prop, sia.prop)
+    
+    
   }
   return(sim.infs.by.year)
 }
@@ -730,12 +772,13 @@ output.coeff.of.var.and.other.variables <- function(window.length){
   num.windows = 25 + (10 - window.length)
   
   coeff.var = matrix(0, length(African_data[ , 1]), num.windows)
-  for ( backwards in 0 : (num.windows - 1)){
+  for ( j in 0 : (num.windows - 1)){
     for ( i in 1 : length(African_data[ , 1])){
-      coeff.var[i, num.windows - backwards]  =  sd(African_data[i, (5 + backwards):(5 + window.length - 1 + backwards )], na.rm = TRUE) /  mean(as.numeric(African_data[i, (5 + backwards):(5 + window.length - 1 + backwards)]), na.rm = TRUE)
-      if(is.na( mean(as.numeric(African_data[i, (5 + backwards):(5 + window.length - 1 + backwards)]), na.rm = TRUE)) == FALSE ){
-        if( mean(as.numeric(African_data[i, (5 + backwards):(5 + window.length - 1 + backwards)]), na.rm = TRUE) == 0) {
-          coeff.var[i, num.windows - backwards]  =  0
+      coeff.var[i, num.windows - j]  =  sd(African_data[i, (5 + j):(5 + window.length - 1 + j )], na.rm = TRUE) /  
+        mean(as.numeric(African_data[i, (5 + j):(5 + window.length - 1 + j)]), na.rm = TRUE)
+      if(is.na( mean(as.numeric(African_data[i, (5 + j):(5 + window.length - 1 + j)]), na.rm = TRUE)) == FALSE ){
+        if( mean(as.numeric(African_data[i, (5 + j):(5 + window.length - 1 + j)]), na.rm = TRUE) == 0) {
+          coeff.var[i, num.windows - j]  =  0
         } 
       }
     }
@@ -744,9 +787,10 @@ output.coeff.of.var.and.other.variables <- function(window.length){
   
   
   incidence.per.1000 = matrix(0, length(African_data[ , 1]), num.windows)
-  for ( backwards in 0 : (num.windows - 1)){
+  for ( j in 0 : (num.windows - 1)){
     for ( i in 1 : length(African_data[ , 1])){
-      incidence.per.1000[i, num.windows - backwards]  =  sum(as.numeric(African_data[i,  (5 + backwards):(5 + window.length - 1 + backwards)]) / as.numeric(African.pop.by.year[i, (54 - backwards) : (54 - (window.length - 1) - backwards)]), na.rm = TRUE) * 1000
+      incidence.per.1000[i, num.windows - j]  =  sum(as.numeric(African_data[i,  (5 + j):(5 + window.length - 1 + j)]) / 
+                                                               as.numeric(African.pop.by.year[i, (54 - j) : (54 - (window.length - 1) - j)]), na.rm = TRUE) * 1000
     }
   }
   
@@ -854,35 +898,35 @@ plot.coeff.var.with.inputs <- function(African.countries, countries.to.plot,
     }
   } else {k = seq(1, 47)}
   j = start.year - 1979
-  African.cov = data.frame(labels1 = countries.to.plot, Coeff.of.var = coeff.var[k, j], Incidence = incidence.per.1000[k, j], BR = mean.br[k, j], mean.vacc = mean.vac[k, j], Inverse.BR = 1/mean.br[k, j])
+  African.cov = data.frame(labels1 = countries.to.plot[1:length(k)], Coeff.of.var = coeff.var[k, j], Incidence = incidence.per.1000[k, j], BR = mean.br[k, j], mean.vacc = mean.vac[k, j], Inverse.BR = 1/mean.br[k, j])
   #quartz()
   to.plot = ggplot(African.cov, aes(x = Coeff.of.var, y = Incidence, label = labels1)) 
   if(scaling == 'none')
   {
-    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc)) + scale_color_gradient(high = "blue", low = "red") +
-      scale_y_continuous(limits = c(0, 100) ) + scale_x_continuous(limits = c(0, 3.5) ) +
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc, alpha = .7)) + scale_color_gradient2(low="red", mid="yellow", high="blue", limits=c(0, 100),  midpoint=50, guide = FALSE) +
+      scale_y_continuous(limits = c(0, 100) ) + scale_x_continuous(limits = c(0, 3.5) ) + scale_size_continuous(range=c(10, 30), guide = FALSE) +
       labs(x = "Coefficient of variation", y = paste('Incidence per 1000:',toString(start.year),'-',toString(start.year + window.length - 1)))  +
       theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
-      geom_text(size = text.size, angle = 45) 
+      geom_text(size = text.size)  + theme_bw() + scale_alpha(guide = "none")
   }
   
   
   if(scaling == 'log')
   {
-    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc)) + scale_color_gradient(high = "blue", low = "red") +
-      scale_y_continuous(limits = c(0.001, 100), trans= 'log10' ) + scale_x_continuous(limits = c(0, 3.5) ) +
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc, alpha = .7)) + scale_color_gradient2(low="red", mid="yellow", high="blue", limits=c(0, 100),  midpoint=50, guide = FALSE) +
+      scale_y_continuous(limits = c(0.001, 100), trans= 'log10' ) + scale_x_continuous(limits = c(0, 3.5) ) +  scale_size_continuous(range=c(10, 30), guide = FALSE) +
       labs(x = "Coefficient of variation", y = paste('Incidence per 1000:',toString(start.year),'-',toString(start.year + window.length - 1)))  +
       theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
-      geom_text(size = 3, angle = 45) 
+      geom_text(size = text.size) + theme_bw() + scale_alpha(guide = "none")
   }
   
   if(scaling == 'sqrt')
   {
-    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc)) + scale_color_gradient(high = "blue", low = "red") +
-      scale_y_continuous(limits = c(0, 100), trans= 'sqrt' ) + scale_x_continuous(limits = c(0, 3.5) ) +
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = mean.vacc, alpha = .8)) + scale_color_gradientn(colours = colorRamps::matlab.like2(100)) +
+      scale_y_continuous(limits = c(0, 160), trans= 'sqrt' ) + scale_x_continuous(limits = c(0, 3.5), breaks = c(seq(from = 0, to = 3.5, by = 0.5) )) +  scale_size_continuous(range=c(10, 30), guide = FALSE) +
       labs(x = "Coefficient of variation", y = paste('Incidence per 1000:',toString(start.year),'-',toString(start.year + window.length - 1)))  +
       theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
-      geom_text(size = 3, angle = 45) 
+      geom_text(size = text.size) + theme_bw() + scale_alpha(guide = "none") + theme(panel.grid.major = element_line(size = 1))  
   }
   
   
@@ -1000,3 +1044,1492 @@ output.data.for.animation <- function(window.length, interp.resolution){
   }
   return(anim.data2)
 }
+
+
+
+
+
+###################################
+# Output coefficient of variation for a variable year periods, with 1 year moving window. 
+# Can specify which regions we are interested in using this function
+# Also output mean birth and vaccination rates along with cumulative incidence in those 10 years
+###################################
+output.coeff.of.var.and.other.variables.specify.regions <- function(window.length, regions, official.vacc){
+  
+  cases.by.country.by.year = read.csv("Measles_cases_by_year.csv", stringsAsFactors = FALSE)
+  Birth.rates = read.csv("Birth_rates.csv", stringsAsFactors = FALSE)
+  pop.by.year = read.csv("All_populations.csv", stringsAsFactors = FALSE)
+  if(official.vacc == 1){
+    vacc.rates = read.csv("Vacc_rates_official.csv", stringsAsFactors = FALSE)
+    vacc.rates = cbind(vacc.rates[, 2], vacc.rates[, seq(36, 3, -1)], vacc.rates$WHO_REGION)
+    colnames(vacc.rates) = c("Country",paste(seq(1980, 2013)), "WHO_REGION")
+  } else{
+    vacc.rates = read.csv("Measles_vac_all.csv", stringsAsFactors = FALSE)
+  }
+  
+  
+  subset.pop.by.year = subset(pop.by.year, pop.by.year$WHO_REGION %in% regions)
+  subset.vaccination = subset(vacc.rates, vacc.rates$WHO_REGION %in% regions)
+  subset.birth.rates = subset(Birth.rates, Birth.rates$WHO_REGION %in% regions)
+  subset.data = subset(cases.by.country.by.year, cases.by.country.by.year$WHO_REGION %in% regions)
+  
+  missing1 = setdiff(subset.vaccination$Country, subset.pop.by.year$Country.Name)
+  if(length(missing1) > 0){
+    j = which(subset.vaccination$Country %in% missing1)
+    subset.vaccination = subset.vaccination[-j, ]
+  }
+  missing2 = setdiff(subset.birth.rates$Country, subset.vaccination$Country)
+  if(length(missing2) > 0){
+    j = which(subset.birth.rates$Country %in% missing2)
+    subset.birth.rates = subset.birth.rates[-j, ]
+  }
+  missing3 = setdiff(subset.data$Cname, subset.vaccination$Country)
+  if(length(missing3) > 0){
+    j = which(subset.data$Cname %in% missing3)
+    subset.data = subset.data[-j, ]
+  }
+  
+  
+  p1  =  subset.pop.by.year
+  p2  =  subset.vaccination
+  p3  =  subset.birth.rates
+  p4  =  subset.data
+  
+  num.windows = 25 + (10 - window.length)
+  for ( i in 1 : length(subset.vaccination[, 1])){
+    C  =  subset.vaccination$Country[i]
+    p2[i, ]  =  subset.vaccination[i, ]
+    j = which(subset.pop.by.year$Country.Name == C)
+    p1[i, ]  =  subset.pop.by.year[j, ]
+    j = which(subset.birth.rates$Country == C)
+    p3[i, ]  =  subset.birth.rates[j, ]
+    j = which(subset.data$Cname == C)
+    p4[i, ]  =  subset.data[j, ]
+  }
+  subset.pop.by.year = p1
+  subset.vaccination = p2
+  subset.birth.rates = p3
+  subset.data = p4
+  
+  coeff.var = matrix(0, length(subset.data[ , 1]), num.windows)
+  for ( j in 0 : (num.windows - 1)){
+    for ( i in 1 : length(subset.data[ , 1])){
+      coeff.var[i, num.windows - j]  =  sd(subset.data[i, (5 + j):(5 + window.length - 1 + j )], na.rm = TRUE) /  
+        mean(as.numeric(subset.data[i, (5 + j):(5 + window.length - 1 + j)]), na.rm = TRUE)
+      if(is.na( mean(as.numeric(subset.data[i, (5 + j):(5 + window.length - 1 + j)]), na.rm = TRUE)) == FALSE ){
+        if( mean(as.numeric(subset.data[i, (5 + j):(5 + window.length - 1 + j)]), na.rm = TRUE) == 0) {
+          coeff.var[i, num.windows - j]  =  0
+        } 
+      }
+    }
+  }
+  
+  
+  
+  incidence.per.1000 = matrix(0, length(subset.data[ , 1]), num.windows)
+  for ( j in 0 : (num.windows - 1)){
+    for ( i in 1 : length(subset.data[ , 1])){
+      incidence.per.1000[i, num.windows - j]  =  sum(as.numeric(subset.data[i,  (5 + j):(5 + window.length - 1 + j)]) / 
+                                                               as.numeric(subset.pop.by.year[i, (54 - j) : (54 - (window.length - 1) - j)]), na.rm = TRUE) * 1000
+    }
+  }
+  
+  
+  
+  
+  
+  mean.vac  =  matrix(0, length(subset.vaccination[, 1]), num.windows) 
+  for (j in 0 :  (num.windows - 1)){
+    for ( i in 1 : length(subset.vaccination[, 1])){
+      mean.vac[i, j + 1]  =  mean(as.numeric(subset.vaccination[i, (2 + j):(2 + window.length - 1  + j )]), na.rm = TRUE)
+    }
+  }
+  
+  subset.birth.rates$X2013 = subset.birth.rates$X2012
+  subset.birth.rates2 = subset.birth.rates[, - (length(subset.birth.rates[1, ]) - 1)]
+  subset.birth.rates2 =subset.birth.rates2 [ ,-(1:20)]
+  mean.br  =  matrix(0, length(subset.birth.rates[, 1]), num.windows) 
+  for (j in 0 :  (num.windows - 1)){
+    for ( i in 1 : length(subset.birth.rates[, 1])){
+      mean.br[i, j+1]  =  mean(as.numeric(subset.birth.rates2[i, (1 + j) : (1 + window.length - 1  + j)]), na.rm = TRUE)
+    }
+  }
+  
+  return(list(coeff.var, incidence.per.1000, mean.vac, mean.br, p1$WHO_REGION, p1$Country.Name))
+}
+
+
+
+
+
+
+###################################
+# Output coefficient of variation for a variable year periods, with 1 year moving window. 
+# Can specify which regions we are interested in using this function
+# Also output mean birth and vaccination rates along with cumulative incidence in those 10 years
+###################################
+output.coeff.vs.incidence.data.specify.region <- function(window.length, interp.resolution, regions, official.vacc ){
+  # output all data in matrix form
+  list[coeff.var2, incidence.per.10002, mean.vac2, mean.br2, region.code, countries] = output.coeff.of.var.and.other.variables.specify.regions(window.length,regions, official.vacc)
+  
+  # the matrix form of the data is interpolated so that the animation will be smooth
+  coeff.var = matrix(0, length(coeff.var2[, 1]), interp.resolution * ( length(coeff.var2[1, ])-1) + 1)
+  incidence.per.1000 = matrix(0, length(coeff.var2[, 1]), interp.resolution * (length(coeff.var2[1, ])-1) + 1)
+  mean.vac = matrix(0, length(coeff.var2[, 1]), interp.resolution * (length(coeff.var2[1, ])-1) + 1)
+  mean.br = matrix(0, length(coeff.var2[, 1]), interp.resolution * (length(coeff.var2[1, ])-1) + 1)
+  
+  for( i in 1 : length(coeff.var2[1, ])){
+    coeff.var[, ((i-1)* interp.resolution) + 1]  =   coeff.var2[, i]
+    incidence.per.1000[, ((i-1)* interp.resolution) + 1]  =   incidence.per.10002[, i]
+    mean.vac[, ((i-1)* interp.resolution) + 1]  =   mean.vac2[, i]
+    mean.br[, ((i-1)* interp.resolution) + 1]  =   mean.br2[, i]
+  }
+  
+  for(i in 1 : (length(coeff.var2[1, ]) - 1 )){
+    for(j in 1 : (interp.resolution - 1)){
+      coeff.var[, ((i-1)* interp.resolution) + 1 + j]  =  coeff.var2[, i]  + (coeff.var2[, i + 1] - coeff.var2[, i]) * j / interp.resolution
+      incidence.per.1000[, ((i-1)* interp.resolution) + 1 + j]  =  incidence.per.10002[, i]  + (incidence.per.10002[, i + 1] - incidence.per.10002[, i]) * j / interp.resolution
+      mean.vac[, ((i-1)* interp.resolution) + 1 + j]  =  mean.vac2[, i]  + (mean.vac2[, i + 1] - mean.vac2[, i]) * j / interp.resolution
+      mean.br[, ((i-1)* interp.resolution) + 1 + j]  =  mean.br2[, i]  + (mean.br2[, i + 1] - mean.br2[, i]) * j / interp.resolution
+    }
+  }
+  
+  return( list(coeff.var, incidence.per.1000, mean.vac, mean.br, region.code, countries))
+  
+}
+
+
+
+
+
+
+
+###################################
+# Output data for google bubble chart where we can specify which regions we are interested in seeing
+# Setting official.vac to 1 uses official WHO vaccination rates, whilst any other value uses WHO estimates
+###################################
+output.data.for.animation.specify.region <- function(window.length, interp.resolution, regions, official.vacc){
+  
+  list[coeff.var, incidence.per.1000, mean.vac, mean.br, region.code, countries]  <- output.coeff.vs.incidence.data.specify.region(window.length, interp.resolution, regions, official.vacc)
+  
+  
+  count = 1
+  anim.data = matrix(0, (length(coeff.var[, 1])) * length(coeff.var[1, ]), 7)
+  anim.data  =  data.frame(anim.data)
+  colnames(anim.data) = c("Country", "Coefficient.of.Variation", "Incidence", "Mean.vaccination", "Mean.birth.rate", "Year", "WHO_REGION")
+  
+  for(i in 1:length(coeff.var[1, ])){
+    anim.data$Country[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  countries
+    anim.data$Coefficient.of.Variation[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  round(as.numeric(coeff.var[, i]),2)
+    anim.data$Incidence[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  round(as.numeric(incidence.per.1000[, i]),2)
+    anim.data$Mean.vaccination[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  round(as.numeric(mean.vac[, i]),  2)
+    anim.data$Mean.birth.rate[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  round(as.numeric(mean.br[, i]), 2)
+    anim.data$Year[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  (1980 + (i-1) / interp.resolution)
+    anim.data$WHO_REGION[((count - 1) * length(coeff.var[, 1]) + 1): ((count ) * length(coeff.var[, 1]))]  =  region.code
+    count  =  count + 1
+  }
+  
+  anim.data2 = matrix(0, (length(coeff.var[, 1])) * length(coeff.var[1, ]) + (2 * length(regions) * length(unique(anim.data$Year))), 7)
+  anim.data2  =  data.frame(anim.data2)
+  colnames(anim.data2) = c("Country", "Coefficient.of.Variation", "Incidence", "Mean.vaccination", "Mean.birth.rate", "Year", "WHO_REGION")
+  anim.data2[1:length(anim.data[, 1]), ]  =  anim.data
+  
+  year.mins = matrix(0, length(unique(anim.data$Year)), 2)
+  
+  for(i in 1 : length(unique(anim.data$Year))){
+    t  =  subset(anim.data, anim.data$Year ==  unique(anim.data$Year)[i])
+    year.mins[i, 1] = unique(anim.data$Year)[i]
+    year.mins[i, 2] = min(t$Mean.birth.rate,na.rm = T)  
+  }
+  
+  l =  expand.grid("", -1, 0, c(0,100), 0,unique(anim.data$Year), regions)
+  for(i in 1 : (2 * length(regions) * length(unique(anim.data$Year)))){
+    y = l[i, 6]
+    j = which(year.mins[, 1] == y)
+    l[i, 5]  =  year.mins[j, 2]
+  }
+  
+  anim.data2[(length(anim.data[, 1]) + 1 ): length(anim.data2[, 1]), ]  =  l
+  for( i in 1 : (2 * length(regions) * length(unique(anim.data$Year)))){
+    anim.data2[length(anim.data[, 1]) + i, 7] = regions[as.numeric(anim.data2[length(anim.data[, 1]) + i,7])]
+    anim.data2[length(anim.data[, 1]) + i, 1] = ""
+  }
+  return(anim.data2)
+}
+
+
+
+
+
+###################################
+# Make overall susceptibility of the population a given value
+###################################
+new.susceptibility.level <- function(disease.state, sus.level, susceptible.indices, recovered.indices){
+  a = sum(disease.state[susceptible.indices])/ sum (disease.state)  
+  disease.state[susceptible.indices]  =  disease.state[susceptible.indices] - (1- sus.level / a) * disease.state[susceptible.indices]
+  disease.state[recovered.indices]  =  disease.state[recovered.indices] + (1-sus.level / a) * disease.state[susceptible.indices]
+  return(disease.state)
+}
+
+
+
+###################################
+# For specified susceptible proportions by age, create a disease state that matches these proportions
+###################################
+construct.specified.disease.state <- function( num.comps, sus.props.by.age){
+  disease.state = initial.disease.state(demographic.ages  ,   1  ,  num.comps,  list.of.ages, mat.immunity.loss)
+  if (length(sus.props.by.age) == 98){
+    j  =  which(list.of.ages == 1)
+    for ( k in 1 : (j-1)){
+      num.people = sum(disease.state[c(susceptible.indices[k], recovered.indices[k])])
+      disease.state[susceptible.indices[k]] = sus.props.by.age[1] * num.people
+      disease.state[recovered.indices[k]] = ( 1 - sus.props.by.age[1]) * num.people
+    }
+    for (k in j : length(list.of.ages)){
+      num.people = sum(disease.state[c(susceptible.indices[k], recovered.indices[k])])
+      disease.state[susceptible.indices[k]] = sus.props.by.age[k - (j-2)] * num.people
+      disease.state[recovered.indices[k]] = ( 1 - sus.props.by.age[k - (j-2)]) * num.people
+    }
+  } else{
+    for ( k in 1 : length(sus.props.by.age)){
+      num.people = sum(disease.state[c(susceptible.indices[k], recovered.indices[k])])
+      disease.state[susceptible.indices[k]] = sus.props.by.age[k] * num.people
+      disease.state[recovered.indices[k]] = ( 1 - sus.props.by.age[k]) * num.people
+    }
+  }
+  return(disease.state)
+}
+
+
+
+
+
+###################################
+# For initial disease state, calculate the expected coefficient of variation and 
+# incidence over a given time period
+###################################
+model.of.coeff.var.incidence <- function(num.repeats, disease.state.input, initial.sus.level, 
+                                         input.sus.props.by.age, sus.props.by.age,
+                                         vacc.by.year, br.by.year, initial.pop.size, 
+                                         vacc.success, av.migrants.per.year, sia.years,
+                                         sia.numbers, start.time.for.spread,
+                                         unreached.population, vacc.efficieny,
+                                         new.figure, colour){
+  
+  if (input.sus.props.by.age == 1){
+    disease.state.input = construct.specified.disease.state( num.comps, sus.props.by.age)
+  }
+  # change the overall susceptibility level to a specified proportion of the population
+  count = 1
+  while(((sum(disease.state.input[susceptible.indices]) / sum(disease.state.input) > (initial.sus.level + 0.002)) | 
+          (sum(disease.state.input[susceptible.indices]) / sum(disease.state.input) < (initial.sus.level - 0.002))) &
+          count < 10){
+    disease.state.input  =  new.susceptibility.level(disease.state.input, sus.level = initial.sus.level, susceptible.indices, recovered.indices )
+    count = count + 1
+  }
+  
+  
+  a = numerous.sims.diff.br.vacc(num.repeats,  disease.state.input, initial.start.time = start.time.for.spread, multi.vacc = vacc.by.year, 
+                                 multi.br = br.by.year, input.infections.all.times = 1, init.pop.size = initial.pop.size, 
+                                 sia.years = sia.years, sia.numbers = sia.numbers, vacc.success = vacc.success, 
+                                 num.migrants.per.year = av.migrants.per.year,
+                                 unreached.pop = unreached.population, vacc.efficieny)
+  
+  c.var = matrix(0, num.repeats, 1)
+  cumulative.inc = matrix(0, num.repeats, 1)
+  total.cases = matrix(0, num.repeats, 1)
+  for (i in 1 : num.repeats){
+    c.var[i] =  sd(unlist(a[i]))/mean(unlist(a[i]))
+    cumulative.inc[i]  =  sum(unlist(a[[i]][[2]]))
+    total.cases[i]   =  sum(unlist(a[[i]][[1]]))
+  }
+  if(new.figure == 1){
+    plot(mean(c.var), mean(cumulative.inc), col = colour, pch = 16, cex = 3)
+  }else{
+    points(mean(c.var), mean(cumulative.inc), col = colour, pch = 16, cex = 3)
+  }
+  
+  return(list(a, c.var, cumulative.inc, total.cases))
+}
+
+
+
+
+###################################
+# Output coefficient of variation for a variable year periods, with 1 year moving window. 
+# Can specify which regions we are interested in using this function
+# Also output mean birth and vaccination rates along with cumulative incidence in those 10 years
+###################################
+output.coeff.of.var.and.other.variables.specify.regions.gaussian.weighting <- function(window.length, regions, gaussian.st.dev, cutoff = 10){
+   
+  cases.by.country.by.year = read.csv("Measles_cases_by_year.csv", stringsAsFactors = FALSE)
+  cases.by.country.by.year = read.csv("Measles_cases_by_year2.csv", stringsAsFactors = FALSE)
+  Birth.rates = read.csv("Birth_rates.csv", , stringsAsFactors = FALSE)
+  pop.by.year = read.csv("All_populations.csv", stringsAsFactors = FALSE)
+  vacc.rates = read.csv("Measles_vac_all.csv", stringsAsFactors = FALSE)
+  
+  subset.pop.by.year = subset(pop.by.year, pop.by.year$WHO_REGION %in% regions)
+  subset.vaccination = subset(vacc.rates, vacc.rates$WHO_REGION %in% regions)
+  subset.birth.rates = subset(Birth.rates, Birth.rates$WHO_REGION %in% regions)
+  subset.data = subset(cases.by.country.by.year, cases.by.country.by.year$WHO_REGION %in% regions)
+  
+  missing1 = setdiff(subset.vaccination$Country, subset.pop.by.year$Country.Name)
+  if(length(missing1) > 0){
+    j = which(subset.vaccination$Country %in% missing1)
+    subset.vaccination = subset.vaccination[-j, ]
+  }
+  missing2 = setdiff(subset.birth.rates$Country, subset.vaccination$Country)
+  if(length(missing2) > 0){
+    j = which(subset.birth.rates$Country %in% missing2)
+    subset.birth.rates = subset.birth.rates[-j, ]
+  }
+  missing3 = setdiff(subset.data$Cname, subset.vaccination$Country)
+  if(length(missing3) > 0){
+    j = which(subset.data$Cname %in% missing3)
+    subset.data = subset.data[-j, ]
+  }
+  
+  
+  p1  =  subset.pop.by.year
+  p2  =  subset.vaccination
+  p3  =  subset.birth.rates
+  p4  =  subset.data
+  
+  num.windows = 25 + (10 - window.length)
+  for ( i in 1 : length(subset.vaccination[, 1])){
+    C  =  subset.vaccination$Country[i]
+    p2[i, ]  =  subset.vaccination[i, ]
+    j = which(subset.pop.by.year$Country.Name == C)
+    p1[i, ]  =  subset.pop.by.year[j, ]
+    j = which(subset.birth.rates$Country == C)
+    p3[i, ]  =  subset.birth.rates[j, ]
+    j = which(subset.data$Cname == C)
+    p4[i, ]  =  subset.data[j, ]
+  }
+  subset.pop.by.year = p1
+  subset.vaccination = p2
+  subset.birth.rates = p3
+  subset.data = p4
+  
+  require(stats)
+  x = seq(1980, 2013)
+  xout = seq(1980, 2013, 1)
+  list[interp.subset.data, interp.subset.vacc, interp.subset.br, interp.subset.pop] = interp.datasets(subset.data, 
+                                                                                                      subset.vaccination, 
+                                                                                                      subset.birth.rates, 
+                                                                                                      subset.pop.by.year,
+                                                                                                      x,
+                                                                                                      xout)
+  mean.cases = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  mean.cases[, 1] = subset.data$Cname
+  mean.cases[, 2] = subset.data$WHO_REGION
+  
+  coeff.var.cases = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  coeff.var.cases[, 1] = subset.data$Cname
+  coeff.var.cases[, 2] = subset.data$WHO_REGION
+  
+  incidence.per.1000 = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  incidence.per.1000[, 1] = subset.data$Cname
+  incidence.per.1000[, 2] = subset.data$WHO_REGION
+  
+  mean.br = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  mean.br[, 1] = subset.data$Cname
+  mean.br[, 2] = subset.data$WHO_REGION
+  
+  mean.vac = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  mean.vac[, 1] = subset.data$Cname
+  mean.vac[, 2] = subset.data$WHO_REGION
+  
+  for(i in 3: length(interp.subset.data[1, ])){
+    
+    w.input = xout - xout[i-2]
+    w = output.weights.gaussian.with.cutoff(w.input, gaussian.st.dev, cutoff)
+    # w is the weights that we use to calculate incidence and coefficient of variation over time
+    #w = dnorm(w.input, mean = 0, sd = gaussian.st.dev)
+    for (j in 1 : length(interp.subset.data[, 1])){  
+      
+      mean.cases[j, i] = weighted.mean(as.numeric(interp.subset.data[j ,-(1:2)]), w)
+      if(mean.cases[j, i] == 0){
+        coeff.var.cases[j, i] = 0
+      } else{
+      coeff.var.cases[j, i] = sqrt(weighted.var(as.numeric(interp.subset.data[j ,-(1:2)]), w)) / as.numeric(mean.cases[j,i])
+      }
+      incidence.per.1000[j, i]  =  1000 * as.numeric(mean.cases[j, i])  /  (as.numeric(sum(as.numeric(interp.subset.pop[j ,-(1:2)], na.rm = T) * w) / sum(w)))
+      mean.br[j, i] = as.numeric(sum(as.numeric(interp.subset.br[j ,-(1:2)]) * w , na.rm = T) / sum(w))
+      mean.vac[j, i] = as.numeric(sum(as.numeric(interp.subset.vacc[j ,-(1:2)]) * w , na.rm = T) / sum(w))   
+      
+    }
+  }
+  xout = seq(1980, 2013, 1/interp.resolution)
+  mean.cases = cbind(mean.cases[,(1:2)], interpolate.give.dataset(mean.cases[, -(1:2)], x, xout))
+  coeff.var.cases = cbind(coeff.var.cases[,(1:2)], interpolate.give.dataset(coeff.var.cases[, -(1:2)], x, xout))
+  incidence.per.1000 = cbind(incidence.per.1000[,(1:2)], interpolate.give.dataset(incidence.per.1000[, -(1:2)], x, xout))
+  mean.br = cbind(mean.br[,(1:2)], interpolate.give.dataset(mean.br[, -(1:2)], x, xout))
+  mean.vac = cbind(mean.vac[,(1:2)], interpolate.give.dataset(mean.vac[, -(1:2)], x, xout))
+  
+  mean.vac[, -(1:2)] = round(as.numeric(mean.vac[, -(1:2)]), 2)
+  mean.cases[, -(1:2)] = round(as.numeric(mean.cases[, -(1:2)]), 2)
+  mean.br[, -(1:2)] = round(as.numeric(mean.br[, -(1:2)]), 2)
+  incidence.per.1000[, -(1:2)] = round(as.numeric(incidence.per.1000[, -(1:2)]), 2)
+  coeff.var.cases[, -(1:2)] = round(as.numeric(coeff.var.cases[, -(1:2)]), 2)
+  
+
+  output.data = matrix(0, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + (2 * length(regions) * length(xout)), 7)
+  output.data  =  data.frame(output.data)
+  colnames(output.data) = c("Country", "Coefficient.of.Variation", "Incidence", "Mean.vaccination", "Mean.birth.rate", "Year", "WHO_REGION")
+  
+  output.data$Country[seq(1, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]))] = rep(mean.cases[, 1], length(coeff.var.cases[1, -(1:2)]))
+  output.data$WHO_REGION[seq(1, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]))] = rep(mean.cases[, 2], length(coeff.var.cases[1, -(1:2)]))
+  count = 1
+  for(i in 3 : length(coeff.var.cases[1, ])){
+    output.data$Coefficient.of.Variation[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = coeff.var.cases[, i]
+    output.data$Incidence[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = incidence.per.1000[, i]
+    output.data$Mean.vaccination[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = mean.vac[, i]
+    output.data$Mean.birth.rate[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = mean.br[, i]
+    output.data$Year[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = xout[i - 2]  
+    count = count + 1
+  }
+
+
+  year.mins = matrix(0, length(xout), 2)
+
+  for(i in 1 : length(xout)){
+    t  =  subset(output.data, output.data$Year ==  unique(xout)[i])
+    year.mins[i, 1] = xout[i]
+    year.mins[i, 2] = as.numeric(min(t$Mean.birth.rate,na.rm = T)  )
+  }
+
+  l =  expand.grid("", -1, 0, c(0,100), 0, xout, regions)
+  
+  for(i in 1 : (2 * length(regions) * length(xout))){
+    y = l[i, 6]
+    j = which(year.mins[, 1] == y)
+    l[i, 5]  =  year.mins[j, 2]
+  }
+
+  output.data[((length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + 1 ): length(output.data[, 1]), ]  =  l
+  
+  for( i in 1 : (2 * length(regions) * length(xout))){
+    output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + i, 7] = regions[as.numeric(output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + i, 7] )]
+    output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)])  + i, 1] = ""
+  }
+  output.data$Coefficient.of.Variation = as.numeric(output.data$Coefficient.of.Variation)
+  output.data$Incidence  =  as.numeric(output.data$Incidence)
+  output.data$Mean.vaccination  =  as.numeric(output.data$Mean.vaccination)
+  output.data$Mean.birth.rate  =  as.numeric(output.data$Mean.birth.rate)
+  output.data$Year   =  as.numeric(output.data$Year)
+  output.data$Coefficient.of.Variation[which(output.data$Coefficient.of.Variation == "Inf")] = 0
+  return(output.data)
+}
+
+
+
+
+
+#####################
+
+interpolate.give.dataset <- function(data,  
+                                     x,
+                                     xout){
+  interp.data = matrix(0, length(data[, 1]), length(xout))
+  for ( i in 1 : length(data[, 1])){
+    y = data[i, ]
+    if(length(which(!is.na(y)) == F) < 2){
+      interp.data[i, ]  =  0} else{
+        list[qq,ww] =  approx (as.numeric(x), as.numeric(y),  method = "linear", xout )
+        interp.data[i, ]  =  round(ww, 2)
+      }
+  }
+  
+  return(interp.data)
+  
+}
+
+
+
+
+
+###############
+# Calculate weighted mean of data, with input weights
+###############
+weighted.mean <- function(x, w, na.rm = T) {
+  if (na.rm) {
+    w <- w[i <- !is.na(x)]
+    x <- x[i]
+  }
+  sum.w <- sum(w, na.rm = na.rm)
+  mean.w <- sum(x * w, na.rm = na.rm) / sum(w)
+  return(mean.w)
+}
+
+
+
+
+###############
+# Calculate weighted variance of data, with input weights
+###############
+weighted.var <- function(x, w, na.rm = T) {
+  if (na.rm) {
+    w <- w[i <- !is.na(x)]
+    x <- x[i]
+  }
+  #sum.w <- sum(w, na.rm = na.rm)
+  #sum.w2 <- sum(w^2, na.rm = na.rm)
+  mean.w <- sum(x * w, na.rm = na.rm) / sum(w)
+  #(sum.w / (sum.w^2 - sum.w2)) * sum(w * (x - mean.w)^2, na.rm =
+   #                                    na.rm)
+  sum(w * (x - mean.w) ^2 , na.rm = na.rm) / sum(w, na.rm = na.rm)
+}
+
+
+
+
+
+#################
+# output the gaussian weight for the averaging process
+#################
+output.weights.gaussian.with.cutoff <- function(x, st.dev, cutoff, neg.only = F){
+  
+  weights = dnorm(x, mean = 0, sd = st.dev)
+  if(neg.only == T){
+    weights[which(x > cutoff)] = 0
+  } else{
+    weights[which(abs(x) > cutoff)] = 0
+  }
+  return(weights)
+}
+
+
+
+
+
+
+###########################
+# separate output of simulation informatively
+###########################
+decompose.simulation.output <- function(x, y, z, window.length){
+  
+  num.windows = y - window.length + 1
+  cases.by.year = matrix(0, x, y)
+  incidence.by.year = matrix(0, x, y)
+  c.var = matrix(0, x, num.windows)
+  cumulative.inc = matrix(0, x, num.windows)
+  total.cases = matrix(0, x, 1)
+  for (i in 1 : x){ 
+    cases.by.year[i, ] = unlist(z[[i]][[1]])
+    total.cases[i]   =  sum(unlist(z[[i]][[1]]))
+    incidence.by.year[i, ] = unlist(z[[i]][[2]])
+  }
+  
+  for(i in 1 : x){
+    for(j in 1 : num.windows){
+      c.var[i,j] =  sd(unlist(z[[i]][[2]])[seq(j, j + window.length - 1) ])/mean(unlist(z[[i]][[2]])[seq(j, j + window.length - 1)])
+      cumulative.inc[i,j]  =  sum(unlist(z[[i]][[2]])[seq(j, j + window.length - 1)])
+    }
+  }
+  
+  
+  return (list(cases.by.year, c.var, cumulative.inc, total.cases, incidence.by.year))
+}  
+
+
+
+
+
+###########################
+# output plots for paper, showing the change in the average incidence and coefficient of variation over time for a chosen region and time period
+###########################
+plots.for.paper <- function(data = anim.data, year = 1990, region = 'AFR', previously.plotted.year = 1990, scaling = 'sqrt', arrow.color = 'red', text.size = 5, region.text){
+  library(grid)
+  max.incidence = max(data$Incidence[which(data$Year == 1980 & data$WHO_REGION == region)], na.rm = T)
+  a = subset(data, data$WHO_REGION == region & anim.data$Year == year & anim.data$Country != "")
+  b = data.frame(labels1 = a$Country, Coeff.of.var =  a$Coefficient.of.Variation, Incidence =  a$Incidence, BR =  a$Mean.birth.rate, Mean_vaccination =  a$Mean.vaccination, Inverse.BR = 1/a$Mean.birth.rate)
+  to.plot = ggplot(b, aes(x = Coeff.of.var, y = Incidence, label = labels1)) 
+  
+  if(scaling == 'sqrt')
+  {
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = 100 - Mean_vaccination, alpha = .8)) + scale_color_gradientn(limits = c(0, 100),colours = colorRamps::matlab.like2(256)) + 
+      scale_y_continuous(limits = c(0, round(max.incidence + 2)), trans= 'sqrt' ) + scale_x_continuous(limits = c(0, 5), breaks = c(seq(from = 0, to = 5, by = 0.5) )) +
+      scale_size_continuous(range=c(10, 30), guide = FALSE) +
+      labs(x = "Coefficient of variation", y = paste("Incidence in", region.text, toString(year)), color = "Non vaccinated" )  +
+      theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
+      geom_text(size = text.size) + theme_bw() + scale_alpha(guide = "none") +
+      theme(panel.grid.major = element_line(size = 1), axis.text=element_text(size=24), axis.title=element_text(size=28)  )
+  }
+  if(scaling == 'none')
+  {
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = 100 - Mean_vaccination, alpha = .8)) + scale_color_gradientn(limits = c(0, 100),colours = colorRamps::matlab.like2(256)) + 
+      scale_y_continuous(limits = c(0, round(max.incidence + 2)) ) + scale_x_continuous(limits = c(0, 5), breaks = c(seq(from = 0, to = 5, by = 0.5) )) +
+      scale_size_continuous(range=c(10, 30), guide = FALSE) +
+      labs(x = "Coefficient of variation", y = paste("Incidence in", region.text, toString(year)), color = "Non vaccinated" )  +
+      theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
+      geom_text(size = text.size) + theme_bw() + scale_alpha(guide = "none") +
+      theme(panel.grid.major = element_line(size = 1), axis.text=element_text(size=14), axis.title=element_text(size=18)  )
+  }
+  
+  
+  
+  Mean_X = matrix(0, year - previously.plotted.year + 1, 1)
+  Mean_Y = matrix(0, year - previously.plotted.year + 1, 1)
+  for ( i in previously.plotted.year : year){
+    Mean_X[i - previously.plotted.year + 1] = mean(anim.data$Coefficient.of.Variation[which(anim.data$Year == i & anim.data$WHO_REGION == region & anim.data$Country != "")], na.rm = T)
+    Mean_Y[i - previously.plotted.year + 1] = mean(anim.data$Incidence[which(anim.data$Year == i & anim.data$WHO_REGION == region & anim.data$Country != "")], na.rm = T)
+  }
+  df <- data.frame(x = Mean_X, y  = Mean_Y)
+  if(year != 1980){
+    qqq1 + geom_path(data = df, aes(x, y, label = NULL ), size = 3, arrow = arrow(), color = arrow.color)
+  }else{
+    qqq1
+  }
+}
+
+
+
+
+
+
+
+
+###########################
+# apply gaussian weights to case data to average over a given window
+###########################
+gaussian.averaging <- function(y, xout, st.dev, cutoff){
+  
+  coeff.var.cases = y
+  incidence.per.1000 = y
+  for(i in 1: length(y[1, ])){
+    
+    w.input = xout - xout[i]
+    w = output.weights.gaussian.with.cutoff(w.input, st.dev, cutoff)
+    # w is the weights that we use to calculate incidence and coefficient of variation over time
+    #w = dnorm(w.input, mean = 0, sd = gaussian.st.dev)
+    for (j in 1 : length(y[, 1])){  
+      
+      mean.cases[j, i] = weighted.mean(as.numeric(y[j ,]), w)
+      if(mean.cases[j, i] == 0){
+        coeff.var.cases[j, i] = 0
+      } else{
+        coeff.var.cases[j, i] = sqrt(weighted.var(as.numeric(y[j ,]), w)) / as.numeric(mean.cases[j,i])
+      }
+      incidence.per.1000[j, i]  =  sum(y[j, ] * w, na.rm = T) 
+    }
+  }
+  return(list(coeff.var.cases, incidence.per.1000))
+}
+
+
+
+
+###################################
+# Output coefficient of variation for a variable year periods, with 1 year moving window. 
+# Can specify which regions we are interested in using this function
+# Also output mean birth and vaccination rates along with cumulative incidence in those 10 years. 
+# Do by selecting case numbers according to a given distribution and then taking sample mean and variance
+###################################
+output.coeff.of.var.and.other.variables.specify.regions.gaussian.weighting.random.selection <- function(window.length, regions, 
+                                                                                                        gaussian.st.dev, 
+                                                                                                        cutoff = 10,
+                                                                                                        rand.length = 1000,
+                                                                                                        neg.averaging.only= F){
+  
+  cases.by.country.by.year = read.csv("Measles_cases_by_year.csv", stringsAsFactors = FALSE)
+  cases.by.country.by.year = read.csv("Measles_cases_by_year2.csv", stringsAsFactors = FALSE)
+  Birth.rates = read.csv("Birth_rates.csv", stringsAsFactors = FALSE)
+  pop.by.year = read.csv("All_populations.csv", stringsAsFactors = FALSE)
+  vacc.rates = read.csv("Measles_vac_all.csv", stringsAsFactors = FALSE)
+  
+  subset.pop.by.year = subset(pop.by.year, pop.by.year$WHO_REGION %in% regions)
+  subset.vaccination = subset(vacc.rates, vacc.rates$WHO_REGION %in% regions)
+  subset.birth.rates = subset(Birth.rates, Birth.rates$WHO_REGION %in% regions)
+  subset.data = subset(cases.by.country.by.year, cases.by.country.by.year$WHO_REGION %in% regions)
+  
+  missing1 = setdiff(subset.vaccination$Country, subset.pop.by.year$Country.Name)
+  if(length(missing1) > 0){
+    j = which(subset.vaccination$Country %in% missing1)
+    subset.vaccination = subset.vaccination[-j, ]
+  }
+  missing2 = setdiff(subset.birth.rates$Country, subset.vaccination$Country)
+  if(length(missing2) > 0){
+    j = which(subset.birth.rates$Country %in% missing2)
+    subset.birth.rates = subset.birth.rates[-j, ]
+  }
+  missing3 = setdiff(subset.data$Cname, subset.vaccination$Country)
+  if(length(missing3) > 0){
+    j = which(subset.data$Cname %in% missing3)
+    subset.data = subset.data[-j, ]
+  }
+  
+  
+  p1  =  subset.pop.by.year
+  p2  =  subset.vaccination
+  p3  =  subset.birth.rates
+  p4  =  subset.data
+  
+  num.windows = 25 + (10 - window.length)
+  for ( i in 1 : length(subset.vaccination[, 1])){
+    C  =  subset.vaccination$Country[i]
+    p2[i, ]  =  subset.vaccination[i, ]
+    j = which(subset.pop.by.year$Country.Name == C)
+    p1[i, ]  =  subset.pop.by.year[j, ]
+    j = which(subset.birth.rates$Country == C)
+    p3[i, ]  =  subset.birth.rates[j, ]
+    j = which(subset.data$Cname == C)
+    p4[i, ]  =  subset.data[j, ]
+  }
+  subset.pop.by.year = p1
+  subset.vaccination = p2
+  subset.birth.rates = p3
+  subset.data = p4
+  
+  require(stats)
+  x = seq(1980, 2013)
+  xout = seq(1980, 2013, 1)
+  list[interp.subset.data, interp.subset.vacc, interp.subset.br, interp.subset.pop] = interp.datasets(subset.data, 
+                                                                                                      subset.vaccination, 
+                                                                                                      subset.birth.rates, 
+                                                                                                      subset.pop.by.year,
+                                                                                                      x,
+                                                                                                      xout)
+  mean.cases = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  mean.cases[, 1] = subset.data$Cname
+  mean.cases[, 2] = subset.data$WHO_REGION
+  
+  coeff.var.cases = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  coeff.var.cases[, 1] = subset.data$Cname
+  coeff.var.cases[, 2] = subset.data$WHO_REGION
+  
+  incidence.per.1000 = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  incidence.per.1000[, 1] = subset.data$Cname
+  incidence.per.1000[, 2] = subset.data$WHO_REGION
+  
+  mean.br = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  mean.br[, 1] = subset.data$Cname
+  mean.br[, 2] = subset.data$WHO_REGION
+  
+  mean.vac = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  mean.vac[, 1] = subset.data$Cname
+  mean.vac[, 2] = subset.data$WHO_REGION
+  
+  for(i in 3: length(interp.subset.data[1, ])){
+    
+    w.input = xout - xout[i-2]
+    w = output.weights.gaussian.with.cutoff(w.input, gaussian.st.dev, cutoff, neg.averaging.only)
+    # w is the weights that we use to calculate incidence and coefficient of variation over time
+    #w = dnorm(w.input, mean = 0, sd = gaussian.st.dev)
+    for (j in 1 : length(interp.subset.data[, 1])){  
+      k = runif(rand.length)
+      rand.cases = matrix(0, rand.length, 1)
+      b = cumsum(w) / sum(w)
+      for(q in 1 : rand.length){
+        rand.cases[q] = as.numeric(interp.subset.data[j, which(b > k[q])[1] + 2])
+      }
+      mean.cases[j, i] = mean(rand.cases, na.rm = T)
+      if(mean.cases[j, i] == 0){
+        coeff.var.cases[j, i] = 0
+      } else{
+        coeff.var.cases[j, i] = as.numeric(sqrt(var(rand.cases, na.rm = T)) / as.numeric(mean.cases[j,i]))
+      }
+      incidence.per.1000[j, i]  =  1000 * as.numeric(mean.cases[j, i])  /  (as.numeric(sum(as.numeric(interp.subset.pop[j ,-(1:2)], na.rm = T) * w) / sum(w)))
+      mean.br[j, i] = as.numeric(sum(as.numeric(interp.subset.br[j ,-(1:2)]) * w , na.rm = T) / sum(w))
+      mean.vac[j, i] = as.numeric(sum(as.numeric(interp.subset.vacc[j ,-(1:2)]) * w , na.rm = T) / sum(w))   
+      
+    }
+  }
+  xout = seq(1980, 2013, 1/interp.resolution)
+  mean.cases = cbind(mean.cases[,(1:2)], interpolate.give.dataset(mean.cases[, -(1:2)], x, xout))
+  coeff.var.cases = cbind(coeff.var.cases[,(1:2)], interpolate.give.dataset(coeff.var.cases[, -(1:2)], x, xout))
+  incidence.per.1000 = cbind(incidence.per.1000[,(1:2)], interpolate.give.dataset(incidence.per.1000[, -(1:2)], x, xout))
+  mean.br = cbind(mean.br[,(1:2)], interpolate.give.dataset(mean.br[, -(1:2)], x, xout))
+  mean.vac = cbind(mean.vac[,(1:2)], interpolate.give.dataset(mean.vac[, -(1:2)], x, xout))
+  
+  mean.vac[, -(1:2)] = round(as.numeric(mean.vac[, -(1:2)]), 2)
+  mean.cases[, -(1:2)] = round(as.numeric(mean.cases[, -(1:2)]), 2)
+  mean.br[, -(1:2)] = round(as.numeric(mean.br[, -(1:2)]), 2)
+  incidence.per.1000[, -(1:2)] = round(as.numeric(incidence.per.1000[, -(1:2)]), 2)
+  coeff.var.cases[, -(1:2)] = round(as.numeric(coeff.var.cases[, -(1:2)]), 2)
+  
+  
+  output.data = matrix(0, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + (2 * length(regions) * length(xout)), 7)
+  output.data  =  data.frame(output.data)
+  colnames(output.data) = c("Country", "Coefficient.of.Variation", "Incidence", "Mean.vaccination", "Mean.birth.rate", "Year", "WHO_REGION")
+  
+  output.data$Country[seq(1, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]))] = rep(mean.cases[, 1], length(coeff.var.cases[1, -(1:2)]))
+  output.data$WHO_REGION[seq(1, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]))] = rep(mean.cases[, 2], length(coeff.var.cases[1, -(1:2)]))
+  count = 1
+  for(i in 3 : length(coeff.var.cases[1, ])){
+    output.data$Coefficient.of.Variation[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = coeff.var.cases[, i]
+    output.data$Incidence[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = incidence.per.1000[, i]
+    output.data$Mean.vaccination[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = mean.vac[, i]
+    output.data$Mean.birth.rate[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = mean.br[, i]
+    output.data$Year[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = xout[i - 2]  
+    count = count + 1
+  }
+  
+  
+  year.mins = matrix(0, length(xout), 2)
+  
+  for(i in 1 : length(xout)){
+    t  =  subset(output.data, output.data$Year ==  unique(xout)[i])
+    year.mins[i, 1] = xout[i]
+    year.mins[i, 2] = as.numeric(min(t$Mean.birth.rate,na.rm = T)  )
+  }
+  
+  l =  expand.grid("", -1, 0, c(0,100), 0, xout, regions)
+  
+  for(i in 1 : (2 * length(regions) * length(xout))){
+    y = l[i, 6]
+    j = which(year.mins[, 1] == y)
+    l[i, 5]  =  year.mins[j, 2]
+  }
+  
+  output.data[((length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + 1 ): length(output.data[, 1]), ]  =  l
+  
+  for( i in 1 : (2 * length(regions) * length(xout))){
+    output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + i, 7] = regions[as.numeric(output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + i, 7] )]
+    output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)])  + i, 1] = ""
+  }
+  output.data$Coefficient.of.Variation = as.numeric(output.data$Coefficient.of.Variation)
+  output.data$Incidence  =  as.numeric(output.data$Incidence)
+  output.data$Mean.vaccination  =  as.numeric(output.data$Mean.vaccination)
+  output.data$Mean.birth.rate  =  as.numeric(output.data$Mean.birth.rate)
+  output.data$Year   =  as.numeric(output.data$Year)
+  output.data$Coefficient.of.Variation[which(output.data$Coefficient.of.Variation == "Inf")] = 0
+  return(output.data)
+}
+
+
+
+
+###################################
+# Output coefficient of variation for a variable year periods, with 1 year moving window. 
+# Can specify which regions we are interested in using this function
+# Also output mean birth and vaccination rates along with cumulative incidence in those 10 years
+###################################
+output.coeff.of.var.and.other.variables.specify.regions.col.forward.5.years <- function(back.length, forward.length, regions, official.vacc){
+  
+  ##' load required data
+  
+  cases.by.country.by.year = read.csv("Measles_cases_by_year.csv", stringsAsFactors = FALSE)
+  Birth.rates = read.csv("Birth_rates.csv", stringsAsFactors = FALSE)
+  pop.by.year = read.csv("All_populations.csv", stringsAsFactors = FALSE)
+  
+  ##' Specify if we want to consider the official vaccination proportions or estimates. Estimates are probably more accurate than official data.
+  
+  if(official.vacc == 1){
+    vacc.rates = read.csv("Vacc_rates_official.csv", stringsAsFactors = FALSE)
+    vacc.rates = cbind(vacc.rates[, 2], vacc.rates[, seq(36, 3, -1)], vacc.rates$WHO_REGION)
+    colnames(vacc.rates) = c("Country",paste(seq(1980, 2013)), "WHO_REGION")
+  } else{
+    vacc.rates = read.csv("Measles_vac_all.csv", stringsAsFactors = FALSE)
+  }
+  
+  ##' Only consider data for the WHO regions that we specify, i.e. only include data from African countries, if the only region is "AFR"
+  
+  subset.pop.by.year = subset(pop.by.year, pop.by.year$WHO_REGION %in% regions)
+  subset.vaccination = subset(vacc.rates, vacc.rates$WHO_REGION %in% regions)
+  subset.birth.rates = subset(Birth.rates, Birth.rates$WHO_REGION %in% regions)
+  subset.data = subset(cases.by.country.by.year, cases.by.country.by.year$WHO_REGION %in% regions)
+  
+  ##' Make sure that all the data sets only consider the same set of countries.
+  
+  missing1 = setdiff(subset.vaccination$Country, subset.pop.by.year$Country.Name)
+  if(length(missing1) > 0){
+    j = which(subset.vaccination$Country %in% missing1)
+    subset.vaccination = subset.vaccination[-j, ]
+  }
+  missing2 = setdiff(subset.birth.rates$Country, subset.vaccination$Country)
+  if(length(missing2) > 0){
+    j = which(subset.birth.rates$Country %in% missing2)
+    subset.birth.rates = subset.birth.rates[-j, ]
+  }
+  missing3 = setdiff(subset.data$Cname, subset.vaccination$Country)
+  if(length(missing3) > 0){
+    j = which(subset.data$Cname %in% missing3)
+    subset.data = subset.data[-j, ]
+  }
+  ##' Order datasets in alphabetical order according to country.
+  
+  subset.pop.by.year = subset.pop.by.year[order(subset.pop.by.year$Country.Name), ]
+  subset.vaccination = subset.vaccination[order(subset.vaccination$Country), ]
+  subset.birth.rates = subset.birth.rates[order(subset.birth.rates$Country), ]
+  subset.data = subset.data[order(subset.data$Cname), ]
+  
+  ##' Re-order and rename columns
+  
+  population  =  cbind(subset.pop.by.year$Country.Name, subset.pop.by.year$WHO_REGION, subset.pop.by.year[paste("X", seq(1980,2013), sep = "")])
+  colnames(population) = c("Country", "WHO_REGION", seq(1980, 2013))
+  vacc.rates  =  cbind(subset.vaccination$Country, subset.vaccination$WHO_REGION, subset.vaccination[paste("X", seq(1980,2013), sep = "")])
+  colnames(vacc.rates) = c("Country", "WHO_REGION", seq(1980, 2013))
+  birth.rates  =  cbind(subset.birth.rates$Country, subset.birth.rates$WHO_REGION, subset.birth.rates[paste("X", c(seq(1980,2012), 2012), sep = "")])
+  colnames(birth.rates) = c("Country", "WHO_REGION", seq(1980, 2013))
+  cases =  cbind(subset.data$Cname, subset.data$WHO_REGION, subset.data[paste("X", seq(1980,2013), sep = "")])
+  colnames(cases) = c("Country", "WHO_REGION", seq(1980, 2013))
+  
+  ##' the number of data points that we will end up with is the number of years in the dataset minus the number of years that we use for retrospective analysis, given by back.length and also minus the number of years we look forward by, given by forward.length
+  num.windows = length(seq(1980, 2013)) - back.length - forward.length
+  initial.year = 1980
+  year = initial.year
+  
+  
+  ##' coeff.var is the coefficient variation over previous 10 years.
+  ##' past.incidence will hold the incidence per 1000 over the previous 10 years. Also work out the mean birth rate in these years.
+  
+  coeff.var = matrix(0, length(cases[ , 1]) , num.windows)
+  past.incidence = matrix(0, length(cases[ , 1]), num.windows)
+  mean.br = matrix(0, length(cases[ , 1]), num.windows)
+  
+  for ( j in 1 : num.windows){
+    for ( i in 1 : length(cases[ , 1])){
+      
+      ##' set the i,j entry to be the coefficient of variation of country i over the given 10 year period in the past. Entry which ultimately corresponds to 1990 in this matrix will be the coefficient of variation of cases from 1980-1989
+      
+      coeff.var[i, j]  =  sd(cases[i, paste(seq(year, year + back.length - 1))], na.rm = TRUE) /  
+        mean(as.numeric(cases[i, paste(seq(year, year + back.length - 1))]), na.rm = TRUE)
+      
+      ##' it is possible that the denominator of this could be 0 or NA, so prevent this from giving strange results.
+      if(is.na( mean(as.numeric(cases[i, paste(seq(year, year + back.length - 1))]), na.rm = TRUE)) == FALSE ){
+        if( mean(as.numeric(cases[i, paste(seq(year, year + back.length - 1))]), na.rm = TRUE) == 0) {
+          coeff.var[i, j]  =  0
+        } 
+      }
+      past.incidence[i, j]  =  sum(as.numeric(cases[i,  paste(seq(year, year + back.length - 1))]) / 
+                                     as.numeric(population[i, paste(seq(year, year + back.length - 1))]), na.rm = TRUE) * 1000
+      if(length(which(is.na(as.numeric(birth.rates[i, paste(seq(year, year + back.length - 1))])))) < back.length){
+        mean.br[i, j]  =  mean(as.numeric(birth.rates[i, paste(seq(year, year + back.length - 1))]), na.rm = TRUE)
+      }
+    }
+    year = year + 1
+  }
+
+  colnames(coeff.var) = paste("X",seq(1990, 2013-forward.length), sep = "")
+  colnames(past.incidence) =  paste("X",seq(1990, 2013-forward.length), sep = "")
+  colnames(mean.br) = paste("X",seq(1990, 2013-forward.length), sep = "")
+  
+  
+  
+  ##' Calculate the incidence over the next number of years given by the input forward.length
+  
+  year = 1990
+  future.incidence  =  matrix(0, length(cases[, 1]), num.windows) 
+  for (j in 1 : num.windows){
+    for ( i in 1 : length(cases[, 1])){
+      future.incidence[i, j]  =  sum(as.numeric(cases[i,  paste(seq(year,year + forward.length))]) / 
+                                       as.numeric(population[i, paste(seq(year,year + forward.length))]), na.rm = TRUE) * 1000
+    }
+    year = year + 1
+  }
+  colnames(future.incidence) = paste("X",seq(1990, 2013-forward.length), sep = "")
+  
+  
+  return(list(coeff.var, past.incidence, future.incidence, mean.br, cases$Country, cases$WHO_REGION))
+}
+
+
+
+
+###################################
+##' Interpolate a matrix
+###################################
+interpolate.data <- function(x, y, xout){
+  Z = matrix(0, length(y[, 1]), length(xout))
+  for(i in 1 : length(y[, 1])){
+    if(length(which(!is.na(((y[i, ]))))) > 1){
+      list[ A, B] = approx(x, y = as.numeric((y[i, ])), xout)
+      Z[i,] = round(B, 2)
+    }
+  }
+  return(Z)
+}
+
+
+
+
+###################################
+# Output coefficient of variation for a variable year periods, with 1 year moving window. 
+# Can specify which regions we are interested in using this function
+# Also output mean birth and vaccination rates along with cumulative incidence in those 10 years
+###################################
+output.coeff.vs.incidence.data.specify.region.col.forward.5.years <- function(back.length, forward.length, interp.resolution, regions, official.vacc ){
+  # output all data in matrix form
+  
+  list[coeff.var2, past.incidence2, future.incidence2, mean.br2, countries, region.code] = output.coeff.of.var.and.other.variables.specify.regions.col.forward.5.years(back.length, forward.length, regions, official.vacc)
+  num.years = length(coeff.var2[1, ]) 
+  num.countries = length(countries)
+  
+  # the matrix form of the data is interpolated so that the animation will be smooth. specify the amount of smoothing that we want via interp.resolution. If this is 10, then it means we will output 10 data points for each year.
+  x = 1990:2008
+  xout = seq(x[1], tail(x, 1), 1/interp.resolution)
+  
+  ##' interpolate the coefficient of variation matrix, add country and region data and name the columns appropriately
+  coeff.var3 = interpolate.data(x, coeff.var2, xout)
+  coeff.var =  data.frame((coeff.var3))
+  colnames(coeff.var) = paste("X", xout, sep = "")
+  
+  ##' Do the same for past incidence, mean birth rate and future incidence
+  past.inc3 = interpolate.data(x, past.incidence2, xout)
+  past.incidence = data.frame(past.inc3)
+  colnames(past.incidence) = paste("X", xout, sep = "")
+  
+  mean.br3 = interpolate.data(x, mean.br2, xout)
+  mean.br = data.frame(mean.br3)
+  colnames(mean.br) = paste("X", xout, sep = "")
+  
+  future.inc3 = interpolate.data(x, future.incidence2, xout)
+  future.incidence = data.frame(future.inc3)
+  colnames(future.incidence) = paste("X", xout, sep = "")
+  
+
+  return( list(coeff.var, past.incidence, future.incidence, mean.br, countries, region.code))
+  
+}
+
+
+
+
+
+
+
+###################################
+# Output data for google bubble chart where we can specify which regions we are interested in seeing
+# Setting official.vac to 1 uses official WHO vaccination rates, whilst any other value uses WHO estimates
+###################################
+output.data.for.animation.specify.region.col.forward.5.years <- function(back.length, forward.length, interp.resolution, regions, official.vacc){
+  
+  list[coeff.var, past.incidence, future.incidence, mean.br, countries, region.code]  <- output.coeff.vs.incidence.data.specify.region.col.forward.5.years(back.length, forward.length, interp.resolution, regions, official.vacc)
+  
+  ##' for the animation, we output line list data, rather than a matrix. Therefore each country will have a line in the data set for every year the data covers.
+  count = 1
+  num.years = length(coeff.var[1, ])
+  num.countries = length(countries)
+  anim.data = matrix(0, num.years * num.countries, 7)
+  anim.data  =  data.frame(anim.data)
+  colnames(anim.data) = c("Country", "Coefficient.of.Variation", "Past.Incidence", "Future.Incidence", "Mean.birth.rate", "Year", "WHO_REGION")
+  
+  anim.data$Country = rep(countries, num.years)
+  anim.data$WHO_REGION = rep(region.code, num.years)
+  for(i in 1:length(coeff.var[1, ])){
+    ##' Specify the set of indices that we want to fill in, these will be used for each named column
+    indices = seq(((count - 1) * num.countries + 1), (count  * num.countries))
+    
+    anim.data$Coefficient.of.Variation[indices]  =  round(as.numeric(coeff.var[, i]), 2)
+    anim.data$Past.Incidence[indices]  =  round(as.numeric(past.incidence[, i]),2)
+    anim.data$Future.Incidence[indices]  =  round(as.numeric(future.incidence[, i]),  2)
+    anim.data$Mean.birth.rate[indices]  =  round(as.numeric(mean.br[, i]), 2)
+    anim.data$Year[indices]  =  (1990 + (i-1) / interp.resolution)
+    count  =  count + 1
+  }
+  
+ # anim.data2 = matrix(0, (length(coeff.var[, 1])) * length(coeff.var[1, ]) + (2 * length(regions) * length(unique(anim.data$Year))), 7)
+#  anim.data2  =  data.frame(anim.data2)
+#  colnames(anim.data2) = c("Country", "Coefficient.of.Variation", "Past.Incidence", "Future.Incidence", "Mean.birth.rate", "Year", "WHO_REGION")
+#  anim.data2[1:length(anim.data[, 1]), 2:6]  =  anim.data[, 2:6]
+#  anim.data2[1:length(anim.data[, 1]), 1]  =  as.character(anim.data[, 1])
+#  anim.data2[1:length(anim.data[, 1]), 7]  =  as.character(anim.data[, 7])
+  
+#  year.mins = matrix(0, length(unique(anim.data$Year)), 2)
+  
+#  for(i in 1 : length(unique(anim.data$Year))){
+#    t  =  subset(anim.data, anim.data$Year ==  unique(anim.data$Year)[i])
+#    year.mins[i, 1] = unique(anim.data$Year)[i]
+#    year.mins[i, 2] = min(t$Mean.birth.rate,na.rm = T)  
+#  }
+#  
+#  l =  expand.grid("", -1, 0, c(0,max(anim.data$Future.Incidence)), 0,unique(anim.data$Year), regions)
+#  for(i in 1 : (2 * length(regions) * length(unique(anim.data$Year)))){
+#    y = l[i, 6]
+#    j = which(year.mins[, 1] == y)
+#    l[i, 5]  =  year.mins[j, 2]
+#  }
+  
+#  anim.data2[(length(anim.data[, 1]) + 1 ): length(anim.data2[, 1]), ]  =  l
+#  for( i in 1 : (2 * length(regions) * length(unique(anim.data$Year)))){
+#    anim.data2[length(anim.data[, 1]) + i, 7] = regions[as.numeric(anim.data2[length(anim.data[, 1]) + i,7])]
+#    anim.data2[length(anim.data[, 1]) + i, 1] = ""
+#  }
+#  return(anim.data2)
+  return(anim.data)
+}
+
+
+
+
+################################
+### Sort data for the animation process
+################################
+get.data.for.animation <- function(regions){
+  
+  #cases.by.country.by.year = read.csv("Measles_cases_by_year.csv", stringsAsFactors = FALSE)
+  cases.by.country.by.year = read.csv("Measles_cases_by_year2.csv", stringsAsFactors = FALSE)
+  Birth.rates = read.csv("Birth_rates.csv", , stringsAsFactors = FALSE)
+  pop.by.year = read.csv("All_populations.csv", stringsAsFactors = FALSE)
+  vacc.rates = read.csv("Measles_vac_all.csv", stringsAsFactors = FALSE)
+  
+  subset.pop.by.year = subset(pop.by.year, pop.by.year$WHO_REGION %in% regions)
+  subset.vaccination = subset(vacc.rates, vacc.rates$WHO_REGION %in% regions)
+  subset.birth.rates = subset(Birth.rates, Birth.rates$WHO_REGION %in% regions)
+  subset.data = subset(cases.by.country.by.year, cases.by.country.by.year$WHO_REGION %in% regions)
+  
+  missing1 = setdiff(subset.vaccination$Country, subset.pop.by.year$Country.Name)
+  if(length(missing1) > 0){
+    j = which(subset.vaccination$Country %in% missing1)
+    subset.vaccination = subset.vaccination[-j, ]
+  }
+  missing2 = setdiff(subset.birth.rates$Country, subset.vaccination$Country)
+  if(length(missing2) > 0){
+    j = which(subset.birth.rates$Country %in% missing2)
+    subset.birth.rates = subset.birth.rates[-j, ]
+  }
+  missing3 = setdiff(subset.data$Cname, subset.vaccination$Country)
+  if(length(missing3) > 0){
+    j = which(subset.data$Cname %in% missing3)
+    subset.data = subset.data[-j, ]
+  }
+  
+  
+  p1  =  subset.pop.by.year
+  p2  =  subset.vaccination
+  p3  =  subset.birth.rates
+  p4  =  subset.data
+  
+  for ( i in 1 : length(subset.vaccination[, 1])){
+    C  =  subset.vaccination$Country[i]
+    p2[i, ]  =  subset.vaccination[i, ]
+    j = which(subset.pop.by.year$Country.Name == C)
+    p1[i, ]  =  subset.pop.by.year[j, ]
+    j = which(subset.birth.rates$Country == C)
+    p3[i, ]  =  subset.birth.rates[j, ]
+    j = which(subset.data$Cname == C)
+    p4[i, ]  =  subset.data[j, ]
+  }
+  subset.pop.by.year = p1
+  subset.vaccination = p2
+  subset.birth.rates = p3
+  subset.data = p4
+  
+  return(list(subset.pop.by.year, subset.vaccination, subset.birth.rates, subset.data))
+}
+
+
+
+prepare.matrices.for.animation <- function(interp.subset.data, subset.data){
+  
+  mean.cases = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  mean.cases[, 1] = subset.data$Cname
+  mean.cases[, 2] = subset.data$WHO_REGION
+  
+  coeff.var.cases = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  coeff.var.cases[, 1] = subset.data$Cname
+  coeff.var.cases[, 2] = subset.data$WHO_REGION
+  
+  incidence.per.1000 = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  incidence.per.1000[, 1] = subset.data$Cname
+  incidence.per.1000[, 2] = subset.data$WHO_REGION
+  
+  mean.br = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  mean.br[, 1] = subset.data$Cname
+  mean.br[, 2] = subset.data$WHO_REGION
+  
+  mean.vac = matrix(0, length(interp.subset.data[, 1]), length(interp.subset.data[1, ]))
+  mean.vac[, 1] = subset.data$Cname
+  mean.vac[, 2] = subset.data$WHO_REGION
+  
+  return(list(mean.cases, coeff.var.cases, incidence.per.1000, mean.br, mean.vac))
+}
+
+
+
+############################
+###
+############################
+
+calculate.all.weighted.means <- function(x, st.dev, cutoff, xout){
+  N = length(x[, 1])
+  M = length(x[1, ])
+  means = matrix(0, N, M)
+  for (j in 1 : M){
+    w.input = xout - xout[j]
+    w = output.weights.gaussian.with.cutoff(w.input, gaussian.st.dev, cutoff)
+    for (i in 1 : N){
+      means[i, j] = weighted.mean(as.numeric(x[i ,]), w)
+    }
+  }
+  return(means)
+}
+
+###################################
+# Output coefficient of variation for a variable year periods, with 1 year moving window. 
+# Can specify which regions we are interested in using this function
+# Also output mean birth and vaccination rates along with cumulative incidence in those 10 years
+###################################
+animation.gaussian.weighting.method <- function(window.length, regions, gaussian.st.dev, cutoff = 10){
+  
+  require(stats)
+  list[subset.pop.by.year, subset.vaccination, subset.birth.rates, subset.data] = get.data.for.animation(regions)
+
+  x = seq(1980, 2013)
+  xout = seq(1980, 2013, 1)
+  
+  ### interpolate the datasets to have entries for all points in time once the interpolation is done.
+  list[interp.subset.data, interp.subset.vacc, interp.subset.br, interp.subset.pop] = interp.datasets(subset.data, 
+                                                                                                      subset.vaccination, 
+                                                                                                      subset.birth.rates, 
+                                                                                                      subset.pop.by.year,
+                                                                                                      x,
+                                                                                                      xout)
+  
+  ### output matrices the correct size for our animation
+  
+  list[mean.cases, coeff.var.cases, incidence.per.1000, mean.br, mean.vac] = prepare.matrices.for.animation(interp.subset.data, subset.data)
+  
+  mean.cases = calculate.all.weighted.means(interp.subset.data[, -(1:2)], st.dev = 7, cutoff = 50, xout)
+  w = matrix(0, length(xout), length(xout))
+  for(i in 1: length(xout)){
+    w.input = xout - xout[i]
+    w[i, ] = output.weights.gaussian.with.cutoff(w.input, gaussian.st.dev, cutoff)
+  }
+  
+#   num.windows = 25 + (10 - window.length)
+#   year = 1980
+#   coeff.var = matrix(0, length(subset.data[ , 1]), num.windows)
+#   incidence.per.1000 = matrix(0, length(subset.data[ , 1]), num.windows)
+#   mean.br = matrix(0, length(subset.data[ , 1]), num.windows)
+#   mean.vacc = matrix(0, length(subset.data[ , 1]), num.windows)
+#   for ( j in 1 : num.windows){
+#     for ( i in 1 : length(subset.data[ , 1])){
+#       coeff.var[i, j]  =  sd(interp.subset.data[i, paste(seq(year, year + window.length - 1))], na.rm = TRUE) /  
+#         mean(as.numeric(interp.subset.data[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE)
+#       if(is.na( mean(as.numeric(interp.subset.data[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE)) == FALSE ){
+#         if( mean(as.numeric(interp.subset.data[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE) == 0) {
+#           coeff.var[i, j]  =  0
+#         } 
+#       }
+#       incidence.per.1000[i, j]  =  sum(as.numeric(interp.subset.data[i,  paste(seq(year, year + window.length - 1))]) / 
+#                                          as.numeric(interp.subset.pop[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE) * 1000
+#       if(length(which(is.na(as.numeric(interp.subset.br[i, paste(seq(year, year + window.length - 1))])))) < window.length){
+#         mean.br[i, j]  =  mean(as.numeric(interp.subset.br[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE)
+#       }
+#       if(length(which(is.na(as.numeric(interp.subset.vacc[i, paste(seq(year, year + window.length - 1))])))) < window.length){
+#         mean.vacc[i, j]  =  mean(as.numeric(interp.subset.vacc[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE)
+#       }
+#     }
+#     year = year + 1
+#   }
+#   
+#   x1 = seq(1, length(coeff.var[1, ]))
+#   w1 = matrix(0, length(x1), length(x1))
+#   for (i in 1 : length(x1)){
+#     w.input = x1 - x1[i]
+#     w1[i, ] = output.weights.gaussian.with.cutoff(w.input, gaussian.st.dev, cutoff)
+#   }
+#   
+#   coeff.2 = coeff.var
+#   incidence.2 = incidence.per.1000
+#   mbr2 = mean.br
+#   mvacc2 = mean.vacc
+#   for(i in 1 : length(coeff.var[1, ])){
+#     for(j in 1 : length(coeff.var[, 1])){
+#       coeff.2[j, i] = sum(coeff.var[j, ] * w1[i, ])
+#       incidence.2[j, i] = sum(incidence.per.1000[j, ] * w1[i, ])
+#       mbr2[j, i] = sum(mean.br[j, ] * w1[i, ])
+#       mvacc2[j, i] = sum(mean.vacc[j, ] * w1[i, ])
+#     }
+#   }
+#   coeff.var.cases = coeff.2
+#   
+  for(i in 1: length(xout)){
+    for (j in 1 : length(interp.subset.data[, 1])){  
+      
+       if(mean.cases[j, i] == 0){
+         coeff.var.cases[j, i + 2] = 0
+       } else{
+         coeff.var.cases[j, i + 2] = coeff.var.calc(as.numeric(interp.subset.data[j ,-(1:2)]), w[i, ], mean.cases[j, ]) 
+       }
+      incidence.per.1000[j, i + 2]  =  1000 * as.numeric(mean.cases[j, i])  /  (as.numeric(sum(as.numeric(interp.subset.pop[j ,-(1:2)], na.rm = T) * w) / sum(w)))
+      mean.br[j, i + 2] = as.numeric(sum(as.numeric(interp.subset.br[j ,-(1:2)]) * w , na.rm = T) / sum(w))
+      mean.vac[j, i + 2] = as.numeric(sum(as.numeric(interp.subset.vacc[j ,-(1:2)]) * w , na.rm = T) / sum(w))
+    }
+  }
+  xout = seq(1980, 2013, 1/interp.resolution)
+  mean.cases = cbind(mean.vac[,(1:2)], interpolate.give.dataset(mean.cases, x, xout))
+  coeff.var.cases = cbind(coeff.var.cases[,(1:2)], interpolate.give.dataset(coeff.var.cases[, -(1:2)], x, xout))
+  incidence.per.1000 = cbind(incidence.per.1000[,(1:2)], interpolate.give.dataset(incidence.per.1000[, -(1:2)], x, xout))
+  mean.br = cbind(mean.br[,(1:2)], interpolate.give.dataset(mean.br[, -(1:2)], x, xout))
+  mean.vac = cbind(mean.vac[,(1:2)], interpolate.give.dataset(mean.vac[, -(1:2)], x, xout))
+  
+  mean.vac[, -(1:2)] = round(as.numeric(mean.vac[, -(1:2)]), 2)
+  mean.cases[, -(1:2)] = round(as.numeric(mean.cases[, -(1:2)]), 2)
+  mean.br[, -(1:2)] = round(as.numeric(mean.br[, -(1:2)]), 2)
+  incidence.per.1000[, -(1:2)] = round(as.numeric(incidence.per.1000[, -(1:2)]), 2)
+  coeff.var.cases[, -(1:2)] = round(as.numeric(coeff.var.cases[, -(1:2)]), 2)
+  
+  
+  output.data = matrix(0, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + (2 * length(regions) * length(xout)), 7)
+  output.data  =  data.frame(output.data)
+  colnames(output.data) = c("Country", "Coefficient.of.Variation", "Incidence", "Mean.vaccination", "Mean.birth.rate", "Year", "WHO_REGION")
+  
+  output.data$Country[seq(1, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]))] = rep(mean.cases[, 1], length(coeff.var.cases[1, -(1:2)]))
+  output.data$WHO_REGION[seq(1, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]))] = rep(mean.cases[, 2], length(coeff.var.cases[1, -(1:2)]))
+  count = 1
+  for(i in 3 : length(coeff.var.cases[1, ])){
+    output.data$Coefficient.of.Variation[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = coeff.var.cases[, i]
+    output.data$Incidence[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = incidence.per.1000[, i]
+    output.data$Mean.vaccination[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = mean.vac[, i]
+    output.data$Mean.birth.rate[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = mean.br[, i]
+    output.data$Year[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = xout[i - 2]  
+    count = count + 1
+  }
+  
+  
+  year.mins = matrix(0, length(xout), 2)
+  
+  for(i in 1 : length(xout)){
+    t  =  subset(output.data, output.data$Year ==  unique(xout)[i])
+    year.mins[i, 1] = xout[i]
+    year.mins[i, 2] = as.numeric(min(t$Mean.birth.rate,na.rm = T)  )
+  }
+  
+  l =  expand.grid("", -1, 0, c(0,100), 0, xout, regions)
+  
+  for(i in 1 : (2 * length(regions) * length(xout))){
+    y = l[i, 6]
+    j = which(year.mins[, 1] == y)
+    l[i, 5]  =  year.mins[j, 2]
+  }
+  
+  output.data[((length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + 1 ): length(output.data[, 1]), ]  =  l
+  
+  for( i in 1 : (2 * length(regions) * length(xout))){
+    output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + i, 7] = regions[as.numeric(output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + i, 7] )]
+    output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)])  + i, 1] = ""
+  }
+  output.data$Coefficient.of.Variation = as.numeric(output.data$Coefficient.of.Variation)
+  output.data$Incidence  =  as.numeric(output.data$Incidence)
+  output.data$Mean.vaccination  =  as.numeric(output.data$Mean.vaccination)
+  output.data$Mean.birth.rate  =  as.numeric(output.data$Mean.birth.rate)
+  output.data$Year   =  as.numeric(output.data$Year)
+  output.data$Coefficient.of.Variation[which(output.data$Coefficient.of.Variation == "Inf")] = 0
+  return(output.data)
+}
+
+
+
+
+
+#####################
+
+interpolate.give.dataset <- function(data,  
+                                     x,
+                                     xout){
+  interp.data = matrix(0, length(data[, 1]), length(xout))
+  for ( i in 1 : length(data[, 1])){
+    y = data[i, ]
+    if(length(which(!is.na(y)) == F) < 2){
+      interp.data[i, ]  =  0} else{
+        list[qq,ww] =  approx (as.numeric(x), as.numeric(y),  method = "linear", xout )
+        interp.data[i, ]  =  round(ww, 2)
+      }
+  }
+  
+  return(interp.data)
+  
+}
+
+
+
+####################
+# interpolate datasets to a given grid
+####################
+
+####################
+# interpolate datasets to a given grid
+####################
+interp.datasets <- function(subset.data, 
+                            subset.vaccination, 
+                            subset.birth.rates, 
+                            subset.pop.by.year, 
+                            x,
+                            xout){
+  
+  interp.subset.data = matrix(0, length(subset.data[, 1]), length(xout) + 2)
+  interp.subset.data[, 1] = subset.data$Cname
+  interp.subset.data[, 2] = subset.data$WHO_REGION
+  
+  interp.subset.vacc = matrix(0, length(subset.vaccination[, 1]), length(xout) + 2)
+  interp.subset.vacc[, 1] = subset.data$Cname
+  interp.subset.vacc[, 2] = subset.data$WHO_REGION
+  
+  interp.subset.br = matrix(0, length(subset.birth.rates[, 1]), length(xout) + 2)
+  interp.subset.br[, 1] = subset.data$Cname
+  interp.subset.br[, 2] = subset.data$WHO_REGION
+  
+  interp.subset.pop = matrix(0, length(subset.pop.by.year[, 1]), length(xout) + 2)
+  interp.subset.pop[, 1] = subset.data$Cname
+  interp.subset.pop[, 2] = subset.data$WHO_REGION
+  
+  for ( i in 1 : length(subset.pop.by.year[, 1])){
+    y = subset.data[i, paste("X", seq(1980, 2013), sep = "")]
+    list[qq,ww] =  approx (as.numeric(x), as.numeric(y),  method = "linear", xout )
+    interp.subset.data[i, 3: length(interp.subset.data[1, ])]  =  round(ww, 2)
+    colnames(interp.subset.data) = c("Country", "WHO_REGION", seq(1980, 2013))
+    
+    y1 = subset.vaccination[i, paste("X", seq(1980, 2013), sep = "")]
+    list[qq,ww] =  approx (as.numeric(x), as.numeric(y1),  method = "linear", xout )
+    interp.subset.vacc[i, 3: length(interp.subset.vacc[1, ])]  =  round(ww, 2)
+    colnames(interp.subset.vacc) = c("Country", "WHO_REGION", seq(1980, 2013))
+    
+    y2 =as.numeric( c(subset.birth.rates[i, paste("X", seq(1980, 2012), sep = "")], subset.birth.rates[i, paste("X", 2012, sep = "")]))
+    if(length(which(is.na(y2) == F)) < 2) 
+    {interp.subset.br[i, 3: length(interp.subset.data[1, ])]  = 0} else{
+      list[qq,ww] =  approx (as.numeric(x), as.numeric(y2),  method = "linear", xout )
+      interp.subset.br[i, 3: length(interp.subset.data[1, ])]  =  round(ww, 2)
+    }
+    colnames(interp.subset.br) = c("Country", "WHO_REGION", seq(1980, 2013))
+    
+    
+    y3 = subset.pop.by.year[i, paste("X", seq(1980, 2013), sep = "")]
+    list[qq,ww] =  approx (as.numeric(x), as.numeric(y3),  method = "linear", xout )
+    interp.subset.pop[i, 3: length(interp.subset.data[1, ])]  =  round(ww, 2)
+    colnames(interp.subset.pop) = c("Country", "WHO_REGION", seq(1980, 2013))
+  }
+  
+  return(list(interp.subset.data, interp.subset.vacc, interp.subset.br, interp.subset.pop))
+  
+}
+
+
+
+
+
+###############
+# Calculate weighted mean of data, with input weights
+###############
+weighted.mean <- function(x, w, na.rm = T) {
+  if (na.rm) {
+    w <- w[i <- !is.na(x)]
+    x <- x[i]
+  }
+  sum.w <- sum(w, na.rm = na.rm)
+  mean.w <- sum(x * w, na.rm = na.rm) / sum(w)
+  return(mean.w)
+}
+
+
+
+
+###############
+# Calculate weighted variance of data, with input weights
+###############
+coeff.var.calc <- function(x, w, means, na.rm = T) {
+ # if (na.rm) {
+#    w <- w[i <- !is.na(x)]
+ #   x <- x[i]
+#  }
+ # print(paste("w =", length(w),"x =", length(x), "means =", length(means)))
+  sqrt(sum((w * (x - means)^2) / sum(w, na.rm = na.rm), na.rm = na.rm)) / sum(w * means, na.rm = na.rm)
+  
+  #mean.w <- sum(x * w, na.rm = na.rm) / sum(w)
+  #(sum.w / (sum.w^2 - sum.w2)) * sum(w * (x - mean.w)^2, na.rm =
+  #                                    na.rm)
+  #sum(w * (x - mean.w) ^2 , na.rm = na.rm) / sum(w, na.rm = na.rm)
+}
+
