@@ -1537,7 +1537,8 @@ interpolate.give.dataset <- function(data,
     if(length(which(!is.na(y)) == F) < 2){
       interp.data[i, ]  =  0} else{
         list[qq,ww] =  approx (as.numeric(x), as.numeric(y),  method = "linear", xout )
-        interp.data[i, ]  =  round(ww, 2)
+        #interp.data[i, ]  =  round(ww, 2)
+        interp.data[i, ]  =  ww
       }
   }
   
@@ -1639,19 +1640,26 @@ decompose.simulation.output <- function(x, y, z, window.length){
 ###########################
 # output plots for paper, showing the change in the average incidence and coefficient of variation over time for a chosen region and time period
 ###########################
-plots.for.paper <- function(data = anim.data, year = 1990, region = 'AFR', previously.plotted.year = 1990, scaling = 'sqrt', arrow.color = 'red', text.size = 5, region.text){
+plots.for.paper <- function(data = anim.data, year = 1990, region = 'AFR',
+                            previously.plotted.year = 1990, scaling = 'sqrt', 
+                            arrow.color = 'red', text.size = 5, region.text, 
+                            window.length=10){
   library(grid)
-  max.incidence = max(data$Incidence[which(data$Year == 1980 & data$WHO_REGION == region)], na.rm = T)
-  a = subset(data, data$WHO_REGION == region & anim.data$Year == year & anim.data$Country != "")
+  max.incidence = max(data$Incidence[which(data$Year == min(data$Year) & data$WHO_REGION == region)], na.rm = T)
+  a = subset(data, data$WHO_REGION == region & data$Year == year & data$Country != "")
   b = data.frame(labels1 = a$Country, Coeff.of.var =  a$Coefficient.of.Variation, Incidence =  a$Incidence, BR =  a$Mean.birth.rate, Mean_vaccination =  a$Mean.vaccination, Inverse.BR = 1/a$Mean.birth.rate)
   to.plot = ggplot(b, aes(x = Coeff.of.var, y = Incidence, label = labels1)) 
   
   if(scaling == 'sqrt')
   {
-    qqq1 = to.plot + geom_point(aes(size = BR, colour = 100 - Mean_vaccination, alpha = .8)) + scale_color_gradientn(limits = c(0, 100),colours = colorRamps::matlab.like2(256)) + 
-      scale_y_continuous(limits = c(0, round(max.incidence + 2)), trans= 'sqrt' ) + scale_x_continuous(limits = c(0, 5), breaks = c(seq(from = 0, to = 5, by = 0.5) )) +
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = 100 - Mean_vaccination, alpha = .8)) +
+      scale_color_gradientn(limits = c(0, 100),colours = colorRamps::matlab.like2(256)) + 
+      scale_y_continuous(limits = c(0, round(max.incidence + 2)), trans= 'sqrt' ) + 
+      scale_x_continuous(limits = c(0, 3.5), breaks = c(seq(from = 0, to = 5, by = 0.5) )) +
       scale_size_continuous(range=c(10, 30), guide = FALSE) +
-      labs(x = "Coefficient of variation", y = paste("Incidence in", region.text, toString(year)), color = "Non vaccinated" )  +
+      labs(x = "Coefficient of variation",
+           y = paste("Incidence per 1000 in", region.text, toString(year),"-",toString(year + window.length - 1)), 
+           color = "% Not vaccinated" )  +
       theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
       geom_text(size = text.size) + theme_bw() + scale_alpha(guide = "none") +
       theme(panel.grid.major = element_line(size = 1), axis.text=element_text(size=24), axis.title=element_text(size=28)  )
@@ -1661,7 +1669,7 @@ plots.for.paper <- function(data = anim.data, year = 1990, region = 'AFR', previ
     qqq1 = to.plot + geom_point(aes(size = BR, colour = 100 - Mean_vaccination, alpha = .8)) + scale_color_gradientn(limits = c(0, 100),colours = colorRamps::matlab.like2(256)) + 
       scale_y_continuous(limits = c(0, round(max.incidence + 2)) ) + scale_x_continuous(limits = c(0, 5), breaks = c(seq(from = 0, to = 5, by = 0.5) )) +
       scale_size_continuous(range=c(10, 30), guide = FALSE) +
-      labs(x = "Coefficient of variation", y = paste("Incidence in", region.text, toString(year)), color = "Non vaccinated" )  +
+      labs(x = "Coefficient of variation", y = paste("Incidence in", region.text, toString(year),"-",toString(year + window.length - 1)), color = "Non vaccinated" )  +
       theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
       geom_text(size = text.size) + theme_bw() + scale_alpha(guide = "none") +
       theme(panel.grid.major = element_line(size = 1), axis.text=element_text(size=14), axis.title=element_text(size=18)  )
@@ -1672,8 +1680,8 @@ plots.for.paper <- function(data = anim.data, year = 1990, region = 'AFR', previ
   Mean_X = matrix(0, year - previously.plotted.year + 1, 1)
   Mean_Y = matrix(0, year - previously.plotted.year + 1, 1)
   for ( i in previously.plotted.year : year){
-    Mean_X[i - previously.plotted.year + 1] = mean(anim.data$Coefficient.of.Variation[which(anim.data$Year == i & anim.data$WHO_REGION == region & anim.data$Country != "")], na.rm = T)
-    Mean_Y[i - previously.plotted.year + 1] = mean(anim.data$Incidence[which(anim.data$Year == i & anim.data$WHO_REGION == region & anim.data$Country != "")], na.rm = T)
+    Mean_X[i - previously.plotted.year + 1] = mean(data$Coefficient.of.Variation[which(data$Year == i & data$WHO_REGION == region & data$Country != "")], na.rm = T)
+    Mean_Y[i - previously.plotted.year + 1] = mean(data$Incidence[which(data$Year == i & data$WHO_REGION == region & data$Country != "")], na.rm = T)
   }
   df <- data.frame(x = Mean_X, y  = Mean_Y)
   if(year != 1980){
@@ -1681,6 +1689,7 @@ plots.for.paper <- function(data = anim.data, year = 1990, region = 'AFR', previ
   }else{
     qqq1
   }
+  return(qqq1)
 }
 
 
@@ -2248,7 +2257,7 @@ calculate.all.weighted.means <- function(x, st.dev, cutoff, xout){
   means = matrix(0, N, M)
   for (j in 1 : M){
     w.input = xout - xout[j]
-    w = output.weights.gaussian.with.cutoff(w.input, gaussian.st.dev, cutoff)
+    w = output.weights.gaussian.with.cutoff(w.input, st.dev, cutoff)
     for (i in 1 : N){
       means[i, j] = weighted.mean(as.numeric(x[i ,]), w)
     }
@@ -2531,5 +2540,244 @@ coeff.var.calc <- function(x, w, means, na.rm = T) {
   #(sum.w / (sum.w^2 - sum.w2)) * sum(w * (x - mean.w)^2, na.rm =
   #                                    na.rm)
   #sum(w * (x - mean.w) ^2 , na.rm = na.rm) / sum(w, na.rm = na.rm)
+}
+
+
+
+animation.gaussian.weighting.method.2 <- function(window.length, regions, 
+                                                  gaussian.st.dev, cutoff = 50, 
+                                                  interp.resolution = 20){
+  
+  require(stats)
+  list[subset.pop.by.year, subset.vaccination, subset.birth.rates, subset.data] = get.data.for.animation(regions)
+  
+  x = seq(1980, 2013)
+  xout = seq(1980, 2013, 1)
+  
+  ### interpolate the datasets to have entries for all points in time once the interpolation is done.
+  list[interp.subset.data, interp.subset.vacc, interp.subset.br, interp.subset.pop] = interp.datasets(subset.data, 
+                                                                                                      subset.vaccination, 
+                                                                                                      subset.birth.rates, 
+                                                                                                      subset.pop.by.year,
+                                                                                                      x,
+                                                                                                      xout)
+  
+  ### output matrices the correct size for our animation
+  list[mean.cases, coeff.var.cases, incidence.per.1000, mean.br, mean.vac] = prepare.matrices.for.animation(interp.subset.data, subset.data)
+  
+ # mean.cases = calculate.all.weighted.means(interp.subset.data[, -(1:2)], gaussian.st.dev, cutoff = 50, xout)
+  
+  
+  #w = matrix(0, length(xout), length(xout))
+  #for(i in 1: length(xout)){
+  #  w.input = xout - xout[i]
+  #  w[i, ] = output.weights.gaussian.with.cutoff(w.input, gaussian.st.dev, cutoff)
+  #  w[i, ] = w[i, ]/ sum(w[i, ])
+  #}
+  
+  num.windows = 25 + (10 - window.length)
+  year = 1980
+  coeff.var = matrix(0, length(subset.data[ , 1]), num.windows)
+  incidence.per.1000 = matrix(0, length(subset.data[ , 1]), num.windows)
+  mean.br = matrix(0, length(subset.data[ , 1]), num.windows)
+  mean.vac = matrix(0, length(subset.data[ , 1]), num.windows)
+  for ( j in 1 : num.windows){
+    for ( i in 1 : length(subset.data[ , 1])){
+      coeff.var[i, j]  =  sd(interp.subset.data[i, paste(seq(year, year + window.length - 1))], na.rm = TRUE) /  
+        mean(as.numeric(interp.subset.data[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE)
+      if(is.na( mean(as.numeric(interp.subset.data[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE)) == FALSE ){
+        if( mean(as.numeric(interp.subset.data[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE) == 0) {
+          coeff.var[i, j]  =  0
+        } 
+      }
+      incidence.per.1000[i, j]  =  sum(as.numeric(interp.subset.data[i,  paste(seq(year, year + window.length - 1))]) / 
+                                         as.numeric(interp.subset.pop[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE) * 1000
+      if(length(which(is.na(as.numeric(interp.subset.br[i, paste(seq(year, year + window.length - 1))])))) < window.length){
+        mean.br[i, j]  =  mean(as.numeric(interp.subset.br[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE)
+      }
+      if(length(which(is.na(as.numeric(interp.subset.vacc[i, paste(seq(year, year + window.length - 1))])))) < window.length){
+        mean.vac[i, j]  =  mean(as.numeric(interp.subset.vacc[i, paste(seq(year, year + window.length - 1))]), na.rm = TRUE)
+      }
+    }
+    year = year + 1
+  }
+  
+  x1 = seq(1, length(coeff.var[1, ]))
+  w1 = matrix(0, length(x1), length(x1))
+  for (i in 1 : length(x1)){
+    w.input = x1 - x1[i]
+    w1[i, ] = output.weights.gaussian.with.cutoff(w.input, gaussian.st.dev, cutoff)
+    w1[i, ] = w1[i, ] / sum(w1[i, ])
+  }
+  
+  coeff.2 = coeff.var
+  incidence.2 = incidence.per.1000
+  mbr2 = mean.br
+  mvacc2 = mean.vac
+  for(i in 1 : length(coeff.var[1, ])){
+    for(j in 1 : length(coeff.var[, 1])){
+      coeff.2[j, i] = sum(coeff.var[j, ] * w1[i, ])
+      incidence.2[j, i] = sum(incidence.per.1000[j, ] * w1[i, ])
+      mbr2[j, i] = mean.br[j, i] 
+      mvacc2[j, i] = mean.vac[j, i]
+    }
+  }
+  coeff.var.cases = coeff.2
+  incidence.per.1000 = incidence.2
+  mean.br = mbr2
+  mean.vac = mvacc2
+  
+  
+    
+  x = seq(1980 + (window.length - 1), 2013)
+  xout = seq(1980 + (window.length - 1), 2013, 1/interp.resolution)
+ # mean.cases = cbind(mean.vac[,(1:2)], interpolate.give.dataset(mean.cases, x, xout))
+  coeff.var.cases = cbind(interp.subset.data[,(1:2)], interpolate.give.dataset(coeff.var.cases, x, xout))
+  incidence.per.1000 = cbind(interp.subset.data[,(1:2)], interpolate.give.dataset(incidence.per.1000, x, xout))
+  mean.br = cbind(interp.subset.data[,(1:2)], interpolate.give.dataset(mean.br, x, xout))
+  mean.vac = cbind(interp.subset.data[,(1:2)], interpolate.give.dataset(mean.vac, x, xout))
+  
+  mean.vac[, -(1:2)] = round(as.numeric(mean.vac[, -(1:2)]), 2)
+ # mean.cases[, -(1:2)] = round(as.numeric(mean.cases[, -(1:2)]), 2)
+  mean.br[, -(1:2)] = round(as.numeric(mean.br[, -(1:2)]), 2)
+  incidence.per.1000[, -(1:2)] = round(as.numeric(incidence.per.1000[, -(1:2)]), 2)
+  coeff.var.cases[, -(1:2)] = round(as.numeric(coeff.var.cases[, -(1:2)]), 2)
+  
+  
+  output.data = matrix(0, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + (2 * length(regions) * length(xout)), 7)
+  output.data  =  data.frame(output.data)
+  colnames(output.data) = c("Country", "Coefficient.of.Variation", "Incidence", "Mean.vaccination", "Mean.birth.rate", "Year", "WHO_REGION")
+  
+  output.data$Country[seq(1, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]))] = rep(interp.subset.data[, 1], length(coeff.var.cases[1, -(1:2)]))
+  output.data$WHO_REGION[seq(1, (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]))] = rep(interp.subset.data[, 2], length(coeff.var.cases[1, -(1:2)]))
+  count = 1
+  for(i in 3 : length(coeff.var.cases[1, ])){
+    output.data$Coefficient.of.Variation[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = coeff.var.cases[, i]
+    output.data$Incidence[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = incidence.per.1000[, i]
+    output.data$Mean.vaccination[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = mean.vac[, i]
+    output.data$Mean.birth.rate[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = mean.br[, i]
+    output.data$Year[seq(((count - 1) * (length(coeff.var.cases[, 1]))) + 1, count * (length(coeff.var.cases[, 1])))] = xout[i - 2]  
+    count = count + 1
+  }
+  
+  
+  year.mins = matrix(0, length(xout), 2)
+  
+  for(i in 1 : length(xout)){
+    t  =  subset(output.data, output.data$Year ==  unique(xout)[i])
+    year.mins[i, 1] = xout[i]
+    year.mins[i, 2] = as.numeric(min(t$Mean.birth.rate,na.rm = T)  )
+  }
+  
+  l =  expand.grid("", -1, 0, c(0,100), 0, xout, regions)
+  
+  for(i in 1 : (2 * length(regions) * length(xout))){
+    y = l[i, 6]
+    j = which(year.mins[, 1] == y)
+    l[i, 5]  =  year.mins[j, 2]
+  }
+  
+  output.data[((length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + 1 ): length(output.data[, 1]), ]  =  l
+  
+  for( i in 1 : (2 * length(regions) * length(xout))){
+    output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + i, 7] = regions[as.numeric(output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)]) + i, 7] )]
+    output.data[ (length(coeff.var.cases[, 1])) * length(coeff.var.cases[1, -(1:2)])  + i, 1] = ""
+  }
+  output.data$Coefficient.of.Variation = as.numeric(output.data$Coefficient.of.Variation)
+  output.data$Incidence  =  as.numeric(output.data$Incidence)
+  output.data$Mean.vaccination  =  as.numeric(output.data$Mean.vaccination)
+  output.data$Mean.birth.rate  =  as.numeric(output.data$Mean.birth.rate)
+  output.data$Year   =  as.numeric(output.data$Year)
+  output.data$Coefficient.of.Variation[which(output.data$Coefficient.of.Variation == "Inf")] = 0
+  return(output.data)
+}
+
+#########################
+### Do multiple ggplots in a grid
+#########################
+
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+
+
+
+plots.for.gif <- function(data = anim.data, year = 1990, region = 'AFR',
+                            previously.plotted.year = 1990, scaling = 'sqrt', 
+                            arrow.color = 'red', text.size = 5, region.text, 
+                            window.length=10, empty = 0){
+  library(grid)
+  max.incidence = max(data$Incidence[which(data$Year == min(data$Year) & data$WHO_REGION == region)], na.rm = T)
+  max.incidence = 55.75
+  max.c.var = max(data$Coefficient.of.Variation[data$WHO_REGION == region], na.rm = T)
+  max.c.var = 1.93
+  a = subset(data, data$WHO_REGION == region & data$Year == year & data$Country != "")
+  b = data.frame(labels1 = a$Country, Coeff.of.var =  a$Coefficient.of.Variation, Incidence =  a$Incidence, BR =  a$Mean.birth.rate, Mean_vaccination =  a$Mean.vaccination, Inverse.BR = 1/a$Mean.birth.rate)
+ # if(empty == 1){
+ #   b$Coeff.of.var = 10
+ # }
+  to.plot = ggplot(b, aes(x = Coeff.of.var, y = Incidence, label = labels1)) 
+  
+  if(scaling == 'sqrt')
+  {
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = 100 - Mean_vaccination, alpha = .8)) +
+      scale_color_gradientn(limits = c(0, 100),colours = colorRamps::matlab.like2(256)) + 
+      scale_y_continuous(limits = c(0, round(max.incidence + 2)), trans= 'sqrt' ) + 
+      scale_x_continuous(limits = c(0, max.c.var), breaks = c(seq(from = 0, to = 5, by = 0.5) )) +
+      scale_size_continuous(range=c(10, 30), guide = FALSE) +
+      labs(x = "Coefficient of variation",
+           y = paste("Incidence per 1000 in", region.text,"1980-2013"), 
+           color = "% Not vaccinated" )  +
+      theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
+      geom_text(size = text.size) + theme_bw() + scale_alpha(guide = "none") +
+      theme(panel.grid.major = element_line(size = 1), axis.text=element_text(size=24), axis.title=element_text(size=28)  )
+  }
+  if(scaling == 'none')
+  {
+    qqq1 = to.plot + geom_point(aes(size = BR, colour = 100 - Mean_vaccination, alpha = .8)) + scale_color_gradientn(limits = c(0, 100),colours = colorRamps::matlab.like2(256)) + 
+      scale_y_continuous(limits = c(0, round(max.incidence + 2)) ) + scale_x_continuous(limits = c(0, 5), breaks = c(seq(from = 0, to = 5, by = 0.5) )) +
+      scale_size_continuous(range=c(10, 30), guide = FALSE) +
+      labs(x = "Coefficient of variation", y = paste("Incidence in", region.text, toString(year),"-",toString(year + window.length - 1)), color = "Non vaccinated" )  +
+      theme(axis.text.x = element_text(colour="black"), axis.text.y = element_text(colour="black"))  + 
+      geom_text(size = text.size) + theme_bw() + scale_alpha(guide = "none") +
+      theme(panel.grid.major = element_line(size = 1), axis.text=element_text(size=14), axis.title=element_text(size=18)  )
+  }
+  
+  
+  
+  print(qqq1)
 }
 
